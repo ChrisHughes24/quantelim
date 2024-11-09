@@ -64,8 +64,10 @@ theorem key {f g : Polynomial ℂ} (hf0 : f ≠ 0) :
 
 end Polynomial
 
+variable {K : Type*} [CommRing K]
+
 inductive Term : (vars : ℕ) → Type
-  | ofRat' : ℚ → Term n
+  | ofInt' : ℤ  → Term n
   | var {n : ℕ} : Fin n → Term n
   | add : {n : ℕ} → Term n → Term n → Term n
   | mul : {n : ℕ} → Term n → Term n → Term n
@@ -76,10 +78,10 @@ inductive Term : (vars : ℕ) → Type
 namespace Term
 
 instance (n : ℕ) : Zero (Term n) :=
-  ⟨ofRat' 0⟩
+  ⟨ofInt' 0⟩
 
 instance (n : ℕ) : One (Term n) :=
-  ⟨ofRat' 1⟩
+  ⟨ofInt' 1⟩
 
 instance (n : ℕ) : Add (Term n) :=
   ⟨Term.add⟩
@@ -90,8 +92,8 @@ instance (n : ℕ) : Mul (Term n) :=
 instance (n : ℕ) : Neg (Term n) :=
   ⟨Term.neg⟩
 
-noncomputable def interpret : {n : ℕ} → Term n → (vars : Fin n → ℂ) → ℂ
-  | _, ofRat' q, _ => q
+noncomputable def interpret : {n : ℕ} → Term n → (vars : Fin n → K) → K
+  | _, ofInt' q, _ => Int.cast q
   | _, var i, vars => vars i
   | _,  add t₁ t₂, vars => interpret t₁ vars + interpret t₂ vars
   | _, mul t₁ t₂, vars => interpret t₁ vars * interpret t₂ vars
@@ -112,7 +114,7 @@ inductive Formula : (freeVars : ℕ) → Type
 
 namespace Formula
 
-def interpret : {n : ℕ} → Formula n → (vars : Fin n → ℂ) → Prop
+def interpret : {n : ℕ} → Formula n → (vars : Fin n → K) → Prop
   | _, eq t₁ t₂, vars => t₁.interpret vars = t₂.interpret vars
   | _, not φ, vars => ¬ interpret φ vars
   | _, and φ₁ φ₂, vars => interpret φ₁ vars ∧ interpret φ₂ vars
@@ -127,7 +129,7 @@ end Formula
 
 /-- Polynomials in n variables as a polynomial in var 0 over the ring of polynomials in the remaining variables -/
 inductive Poly : (n : ℕ) → Type
-  | ofRat' : ℚ → Poly 0
+  | ofInt' : ℤ  → Poly 0
   | const : Poly n → Poly (n+1)
   -- Never use when second part is zero
   | constAddXMul : Poly n → Poly (n + 1) → Poly (n + 1)
@@ -136,20 +138,20 @@ inductive Poly : (n : ℕ) → Type
 namespace Poly
 
 @[simp]
-noncomputable def eval : {n : ℕ} → Poly n → (vars : Fin n → ℂ) → ℂ
-  | _, ofRat' q, _ => q
+noncomputable def eval : {n : ℕ} → Poly n → (vars : Fin n → K) → K
+  | _, ofInt' q, _ => q
   | _, const p, vars => p.eval (fun i => vars i.succ)
   | _, constAddXMul p q, vars =>
     p.eval (fun i => vars i.succ) + vars 0 * q.eval vars
 
-def ofRat : ∀ {n : ℕ}, ℚ → Poly n
-  | 0, x => ofRat' x
-  | _+1, x => const (ofRat x)
+def ofInt : ∀ {n : ℕ}, ℤ  → Poly n
+  | 0, x => ofInt' x
+  | _+1, x => const (ofInt x)
 
-instance {n : ℕ} : RatCast (Poly n) := ⟨ofRat⟩
+instance {n : ℕ} : IntCast (Poly n) := ⟨ofInt⟩
 
 @[simp]
-theorem eval_ratCast : ∀ {n : ℕ} (x : ℚ) (vars : Fin n → ℂ),
+theorem eval_ratCast : ∀ {n : ℕ} (x : ℤ ) (vars : Fin n → K),
     eval (x : Poly n) vars = x
   | 0, _, _ => by simp [eval]
   | n+1, x, vars => by
@@ -157,18 +159,25 @@ theorem eval_ratCast : ∀ {n : ℕ} (x : ℚ) (vars : Fin n → ℂ),
     rw [← @eval_ratCast n]
     rfl
 
-instance {n : ℕ} : Zero (Poly n) := ⟨(0 : ℚ)⟩
+instance {n : ℕ} : Zero (Poly n) := ⟨(0 : ℤ )⟩
 
 @[simp]
-theorem eval_zero {n : ℕ} (vars : Fin n → ℂ) :
+theorem eval_zero {n : ℕ} (vars : Fin n → K) :
     eval (0 : Poly n) vars = 0 := by
   erw [eval_ratCast 0]; simp
+
+instance {n : ℕ} : One (Poly n) := ⟨(1 : ℤ )⟩
+
+@[simp]
+theorem eval_one {n : ℕ} (vars : Fin n → K) :
+    eval (1 : Poly n) vars = 1 := by
+  erw [eval_ratCast 1]; simp
 
 def constAddXMul' {n : ℕ} (p : Poly n) (q : Poly (n + 1)) : Poly (n+1) :=
   if q = 0 then const p else constAddXMul p q
 
 @[simp]
-theorem eval_constAddXMul' {n : ℕ} (p : Poly n) (q : Poly (n + 1)) (vars : Fin (n+1) → ℂ) :
+theorem eval_constAddXMul' {n : ℕ} (p : Poly n) (q : Poly (n + 1)) (vars : Fin (n+1) → K) :
     eval (constAddXMul' p q) vars = p.eval (fun i => vars i.succ) + vars 0 * q.eval vars := by
   simp [constAddXMul']
   split_ifs <;>
@@ -176,7 +185,7 @@ theorem eval_constAddXMul' {n : ℕ} (p : Poly n) (q : Poly (n + 1)) (vars : Fin
 
 @[simp]
 def add : {n : ℕ} → Poly n → Poly n → Poly n
-  | _, ofRat' x, ofRat' y => ofRat' (x + y)
+  | _, ofInt' x, ofInt' y => ofInt' (x + y)
   | _, const p, const q => const (add p q)
   | _, const p, constAddXMul q r => constAddXMul (add p q) r
   | _, constAddXMul p q, const r => constAddXMul (add p r) q
@@ -185,9 +194,9 @@ def add : {n : ℕ} → Poly n → Poly n → Poly n
 instance {n : ℕ} : Add (Poly n) := ⟨Poly.add⟩
 
 @[simp]
-theorem eval_add' : {n : ℕ} → (p : Poly n) → (q : Poly n) → (vars : Fin n → ℂ) →
+theorem eval_add' : {n : ℕ} → (p : Poly n) → (q : Poly n) → (vars : Fin n → K) →
     eval (p.add q) vars = p.eval vars + q.eval vars
-  | _, ofRat' x, ofRat' y => by simp
+  | _, ofInt' x, ofInt' y => by simp
   | _, const p, const q => by simp [eval_add' p q]
   | _, const p, constAddXMul q r => by simp [eval_add' p q, add_comm, add_assoc, add_left_comm]
   | _, constAddXMul p q, const r => by simp [eval_add' p r, add_comm, add_assoc, add_left_comm]
@@ -195,13 +204,13 @@ theorem eval_add' : {n : ℕ} → (p : Poly n) → (q : Poly n) → (vars : Fin 
     simp [eval_add' p r, eval_add' q s, add_comm, add_assoc, add_left_comm, mul_add]
 
 @[simp]
-theorem eval_add : {n : ℕ} → (p : Poly n) → (q : Poly n) → (vars : Fin n → ℂ) →
+theorem eval_add : {n : ℕ} → (p : Poly n) → (q : Poly n) → (vars : Fin n → K) →
     eval (p + q) vars = p.eval vars + q.eval vars :=
   eval_add'
 
 @[simp]
 def mul : {n : ℕ} → Poly n → Poly n → Poly n
-  | _, ofRat' x, ofRat' y => ofRat' (x * y)
+  | _, ofInt' x, ofInt' y => ofInt' (x * y)
   | _, const p, const q => const (mul p q)
   | _, const p, constAddXMul q r => constAddXMul' (mul p q) (mul (const p) r)
   | _, constAddXMul p q, const r => constAddXMul' (mul p r) (mul q (const r))
@@ -213,9 +222,9 @@ def mul : {n : ℕ} → Poly n → Poly n → Poly n
 instance {n : ℕ} : Mul (Poly n) := ⟨Poly.mul⟩
 
 @[simp]
-theorem eval_mul' : {n : ℕ} → (p : Poly n) → (q : Poly n) → (vars : Fin n → ℂ) →
+theorem eval_mul' : {n : ℕ} → (p : Poly n) → (q : Poly n) → (vars : Fin n → K) →
     eval (p.mul q) vars = p.eval vars * q.eval vars
-  | _, ofRat' x, ofRat' y, _ => by simp
+  | _, ofInt' x, ofInt' y, _ => by simp
   | _, const p, const q, _ => by simp [eval_mul' p q]
   | _, const p, constAddXMul q r, _ => by
     simp [eval_mul' p q, eval_mul' (const p) r]; ring
@@ -227,32 +236,32 @@ theorem eval_mul' : {n : ℕ} → (p : Poly n) → (q : Poly n) → (vars : Fin 
   termination_by n p q => (n, sizeOf p + sizeOf q)
 
 @[simp]
-theorem eval_mul : {n : ℕ} → (p : Poly n) → (q : Poly n) → (vars : Fin n → ℂ) →
+theorem eval_mul : {n : ℕ} → (p : Poly n) → (q : Poly n) → (vars : Fin n → K) →
     eval (p * q) vars = p.eval vars * q.eval vars :=
   eval_mul'
 
 @[simp]
 def neg : {n : ℕ} → (p : Poly n) → Poly n
-  | _, ofRat' x => ofRat' (-x)
+  | _, ofInt' x => ofInt' (-x)
   | _, const p => const (neg p)
   | _, constAddXMul p q => constAddXMul (neg p) (neg q)
 
 instance {n : ℕ} : Neg (Poly n) := ⟨Poly.neg⟩
 
 @[simp]
-theorem eval_neg' {n : ℕ} (p : Poly n) : (vars : Fin n → ℂ) →
+theorem eval_neg' {n : ℕ} (p : Poly n) : (vars : Fin n → K) →
     eval (neg p) vars = -p.eval vars := by
   induction p <;> simp_all [eval, add_comm]
 
 @[simp]
-theorem eval_neg {n : ℕ} (p : Poly n) : (vars : Fin n → ℂ) →
+theorem eval_neg {n : ℕ} (p : Poly n) : (vars : Fin n → K) →
     eval (-p) vars = -p.eval vars :=
   eval_neg' p
 
 instance : Sub (Poly n) := ⟨fun p q => p + -q⟩
 
 @[simp]
-theorem eval_sub {n : ℕ} (p q : Poly n) (vars : Fin n → ℂ) :
+theorem eval_sub {n : ℕ} (p q : Poly n) (vars : Fin n → K) :
     eval (p - q) vars = p.eval vars - q.eval vars :=
   (eval_add p (-q) vars).trans <| by simp [sub_eq_add_neg]
 
@@ -263,14 +272,14 @@ def leadingCoeff : ∀ {n : ℕ}, Poly (n+1) → Poly n
 open Mathlib Mathlib.Vector
 
 def leadingMon : ∀ {n : ℕ}, Poly n → Vector ℕ n
-  | _, ofRat' _ => Vector.nil
+  | _, ofInt' _ => Vector.nil
   | _, const p => 0 ::ᵥ leadingMon p
   | _, constAddXMul _ q =>
     match leadingMon q with
     | ⟨n :: l, h⟩ => ⟨(n+1) :: l, h⟩
 
 def degree : ∀ {n : ℕ}, Poly n → ℕ
-  | _, ofRat' _ => 0
+  | _, ofInt' _ => 0
   | _, const _ => 0
   | _, constAddXMul _ q => degree q + 1
 
@@ -278,22 +287,45 @@ def deriv : ∀ {n : ℕ}, Poly (n + 1) → Poly (n + 1)
   | _, constAddXMul _ q => q + constAddXMul' 0 (deriv q)
   | _, _ => 0
 
+def X : Poly (n + 1) := constAddXMul 0 1
+
+instance {n : ℕ} : NatPow (Poly n) := ⟨fun p n => (.*p)^[n] 1⟩
+
 -- def gcd : ∀ {n : ℕ}, (p q : Poly n) →
 --     Poly n × --the gcd
 --     Poly n × --p / gcd
 --     Poly n -- q / gcd
---   | _, ofRat' x, q => ⟨ofRat 1, ofRat' x, q⟩
---   | _, p, ofRat' x => ⟨ofRat 1, p, ofRat' x⟩
+--   | _, ofInt' x, q => ⟨ofInt 1, ofInt' x, q⟩
+--   | _, p, ofInt' x => ⟨ofInt 1, p, ofInt' x⟩
 --   | _, const p, const q =>
 --     let (g, a, b) := gcd p q
 --     (const g, const a, const b)
 --   | _, const p, constAddXMul r s =>
 --     let (g, a, b) := gcd p r
 
+-- letI := Classical.decEq R
+--     if h : degree q ≤ degree p ∧ p ≠ 0 then
+--       let z := C (leadingCoeff p) * X ^ (natDegree p - natDegree q)
+--       have _wf := div_wf_lemma h hq
+--       let dm := divModByMonicAux (p - q * z) hq
+--       ⟨z + dm.1, dm.2⟩
+--     else ⟨0, p⟩
+--   termination_by p => p
+
+/-- returns `(h, d)` such that `q.leadingCoeff ^ (degree p - degree q + 1) * p = h * q + r -/
 def pseudoModDiv (nonzeroVars : Fin n)
-    (p q : Poly n) : Option (Poly n × Poly n) :=
-  let lp := leadingMon p
-  let lq := leadingMon q
+    (p q : Poly n) :
+    (Poly n × --Mod h
+    Poly n) --Div d
+  :=
+  let dp := degree p
+  let dq := degree q
+  if dp ≤ dq
+  then
+  let z := leadingCoeff p * X ^ (dp - dq)
+  let dm := pseudoModDiv (p - q * z) q
+
+
 
 
 end Poly
@@ -302,7 +334,7 @@ open Poly
 
 -- Invariants to maintain. No constant polys in any list. Eqs has smallest by lex leadingMon degree at head
 structure Ands (n : ℕ) : Type where
-  /-- A var is nonzero iff its index is < than `nonzeroVars` -/
+  /-- A var is nonzero iff its index is `<` than `nonzeroVars` -/
   (nonzeroVars : Fin (n+1))
   (eqs : List (Poly (n+1)))
   (neq : Poly (n+1))
