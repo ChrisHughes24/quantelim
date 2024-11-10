@@ -27,7 +27,41 @@ theorem Splits.dvd_iff_roots_le_roots {p q : K[X]}
   · rintro ⟨r, rfl⟩
     rw [roots_mul hq0]; exact le_add_right le_rfl
 
-theorem key {f g : Polynomial ℂ} (hf0 : f ≠ 0) :
+theorem rootMultiplicity_derivative {R : Type*} [CommRing R] [CharZero R] [IsDomain R]
+    {p : R[X]} {t : R} (hpt : Polynomial.IsRoot p t) :
+    (derivative p).rootMultiplicity t = p.rootMultiplicity t - 1 := by
+  by_cases hp0 : p = 0
+  · simp [hp0]
+  · exact derivative_rootMultiplicity_of_root_of_mem_nonZeroDivisors hpt
+      (mem_nonZeroDivisors_iff_ne_zero.2 (Nat.cast_ne_zero.2 (Nat.ne_zero_iff_zero_lt.2
+        ((rootMultiplicity_pos hp0).2 hpt))))
+
+theorem key_one_way {R : Type*} [CommRing R] [IsDomain R] [CharZero R] {f g : R[X]} (hf0 : f ≠ 0)
+    (hfd : f ∣ f.derivative * g) : ∀ x, f.eval x = 0 → g.eval x = 0 := by
+  intro a haf
+  rcases hfd with ⟨r, hr⟩
+  by_cases hdf0 : derivative f = 0
+  · have := natDegree_eq_zero_of_derivative_eq_zero hdf0
+    rw [eq_C_of_derivative_eq_zero hdf0] at haf
+    simp only [eval_C, derivative_C, zero_mul, dvd_zero, iff_true] at haf
+    refine False.elim (hf0 (Polynomial.ext ?_))
+    intro n
+    cases n
+    · rw [haf]; simp
+    · rw [eq_C_of_derivative_eq_zero hdf0]; simp
+  by_contra hg
+  have hdfg0 : f.derivative * g ≠ 0 := mul_ne_zero hdf0 (by rintro rfl; simp_all)
+  have hr' := congr_arg (rootMultiplicity a) hr
+  rw [rootMultiplicity_mul hdfg0, derivative_rootMultiplicity_of_root haf,
+    rootMultiplicity_eq_zero hg, add_zero, rootMultiplicity_mul (hr ▸ hdfg0), add_comm,
+    Nat.sub_eq_iff_eq_add (Nat.succ_le_iff.2 ((rootMultiplicity_pos hf0).2 haf))] at hr'
+  refine lt_irrefl (rootMultiplicity a f) ?_
+  refine lt_of_lt_of_le (Nat.lt_succ_self _)
+    (le_trans (le_add_of_nonneg_left (Nat.zero_le (rootMultiplicity a r))) ?_)
+  conv_rhs => rw [hr']
+  simp [add_assoc]
+
+theorem key {f g : ℂ[X]} (hf0 : f ≠ 0) :
     (∀ x, f.eval x = 0 → g.eval x = 0) ↔ f ∣ f.derivative * g := by
   by_cases hg0 : g = 0
   · simp [hg0]
@@ -46,10 +80,7 @@ theorem key {f g : Polynomial ℂ} (hf0 : f ≠ 0) :
   refine forall_congr' fun a => ?_
   by_cases haf : f.eval a = 0
   · have h0 : 0 < f.rootMultiplicity a := (rootMultiplicity_pos hf0).2 haf
-    have : (f.rootMultiplicity a : ℂ) ∈ nonZeroDivisors ℂ := by
-      rw [mem_nonZeroDivisors_iff_ne_zero, Nat.cast_ne_zero, ← Nat.pos_iff_ne_zero]
-      exact h0
-    rw [derivative_rootMultiplicity_of_root_of_mem_nonZeroDivisors haf this]
+    rw [derivative_rootMultiplicity_of_root haf]
     refine ⟨?_, ?_⟩
     · intro h
       calc rootMultiplicity a f
@@ -62,11 +93,13 @@ theorem key {f g : Polynomial ℂ} (hf0 : f ≠ 0) :
       exact not_le_of_gt (Nat.lt_succ_self _) h
   · simp [haf, rootMultiplicity_eq_zero haf]
 
-theorem square_free_key {f g a : Polynomial ℂ} {hf0 : f ≠ 0} (hgf : g * a = f) (hgdf : g ∣ f.derivative) :
+theorem square_free_key {R : Type*} [CommRing R] [IsDomain R] [CharZero R]
+    {f g a : R[X]} {hf0 : f ≠ 0} (hgf : g * a = f) (hgdf : g ∣ f.derivative) :
     (∀ x, f.eval x = 0 ↔ a.eval x = 0) := by
   have hg0 : g ≠ 0 := by rintro rfl; simp_all
   subst hgf
-  rw [derivative_mul, dvd_add_left (dvd_mul_right _ _), ← key hg0] at hgdf
+  rw [derivative_mul, dvd_add_left (dvd_mul_right _ _)] at hgdf
+  have := key_one_way hg0 hgdf
   simpa only [eval_mul, mul_eq_zero, or_iff_right_iff_imp]
 
 end Polynomial
@@ -366,13 +399,19 @@ theorem leadingCoeff_neg : ∀ {n : ℕ} (p : Poly (n+1)), (-p).leadingCoeff = -
   | _, constAddXMul p q => by
     rw [leadingCoeff, ← leadingCoeff_neg, constAddXMul_neg, leadingCoeff]
 
+noncomputable def toMvPoly (p : Poly n) : MvPolynomial (Fin n) ℤ := eval p MvPolynomial.X
+
+noncomputable def toPoly (p : Poly (n+1)) : Polynomial (MvPolynomial (Fin n) ℤ) :=
+  eval p (Fin.cons Polynomial.X (fun i => Polynomial.C (MvPolynomial.X i)))
+
 mutual
 
 def gcd : ∀ {n : ℕ} (p q : Poly n),
     Poly n × --the gcd
     Poly n × --p / gcd
     Poly n -- q / gcd
-  | 0, ofInt' x, ofInt' y => _
+  | 0, ofInt' x, ofInt' y => ⟨(Int.gcd x y : ℤ),
+    (x / Int.gcd x y : ℤ), (y / Int.gcd x y : ℤ)⟩
   | n+1, _, _ => sorry
 
 
