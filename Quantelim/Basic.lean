@@ -313,8 +313,7 @@ instance {n : ℕ} : NatPow (Poly n) := ⟨fun p n => (.*p)^[n] 1⟩
 --   termination_by p => p
 
 /-- returns `(h, d)` such that `q.leadingCoeff ^ (degree p - degree q + 1) * p = h * q + r -/
-def pseudoModDiv (nonzeroVars : Fin n)
-    (p q : Poly n) :
+def pseudoModDiv (p q : Poly n) :
     (Poly n × --Mod h
     Poly n) --Div d
   :=
