@@ -379,7 +379,7 @@ theorem gcd_mod_wf {p q : Poly (n+1)} (lpd lqd : Poly n) (h : q.degree ≤ p.deg
     exact lt_of_lt_of_le (Nat.sub_lt_self zero_lt_one (le_trans (Nat.one_le_iff_ne_zero.2 hq0) h)) le_rfl
   · erw [degree_mulConstMulXPow, Nat.add_sub_cancel' h]
     exact Nat.sub_lt_self zero_lt_one (le_trans (Nat.one_le_iff_ne_zero.2 hq0) h)
-#print Polynomial.modByMonic
+#print Nat.gcd
 mutual
 
 def gcd : ∀ {n : ℕ} (p q : Poly n),
@@ -388,11 +388,14 @@ def gcd : ∀ {n : ℕ} (p q : Poly n),
     Poly n -- q / gcd
   | 0, ofInt' x, ofInt' y => ⟨(Int.gcd x y : ℤ),
     (x / Int.gcd x y : ℤ), (y / Int.gcd x y : ℤ)⟩
-  | n+1, _, _ => sorry
+  | n+1, p, q =>
+     let (k, h, r) := pseudoModDiv p q
+     gcd p r
+  termination_by n p q => (1, degree q)
 
 
 /-- returns `(k, h, r)` such that `k * p = h * q + r`, and `k` and `q` are relatively prime and
-`degree r < degree q` -/
+`degree r < degree q` provided ... -/
 def pseudoModDiv : ∀ (p q : Poly (n+1)), (Poly n × Poly (n+1) × Poly (n+1)) :=
   fun p q =>
   let dp := degree p
@@ -410,20 +413,9 @@ def pseudoModDiv : ∀ (p q : Poly (n+1)), (Poly n × Poly (n+1) × Poly (n+1)) 
       let (k, h, r) := pseudoModDiv ((mulConstMulXPow lqd 0 p).eraseLead - z) q
       (k * lqd, h + const (k * lpd) * X^n, r)
   else (1, 0, p)
-  termination_by p q => degree p
+  termination_by p q => (0, degree p)
 
 end
-
-
--- -- letI := Classical.decEq R
--- --     if h : degree q ≤ degree p ∧ p ≠ 0 then
--- --       let z := C (leadingCoeff p) * X ^ (natDegree p - natDegree q)
--- --       have _wf := div_wf_lemma h hq
--- --       let dm := divModByMonicAux (p - q * z) hq
--- --       ⟨z + dm.1, dm.2⟩
--- --     else ⟨0, p⟩
--- --   termination_by p => p
-
 
 open Poly
 
