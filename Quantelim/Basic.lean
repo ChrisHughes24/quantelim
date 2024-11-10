@@ -62,6 +62,13 @@ theorem key {f g : Polynomial ℂ} (hf0 : f ≠ 0) :
       exact not_le_of_gt (Nat.lt_succ_self _) h
   · simp [haf, rootMultiplicity_eq_zero haf]
 
+theorem square_free_key {f g a : Polynomial ℂ} {hf0 : f ≠ 0} (hgf : g * a = f) (hgdf : g ∣ f.derivative) :
+    (∀ x, f.eval x = 0 ↔ a.eval x = 0) := by
+  have hg0 : g ≠ 0 := by rintro rfl; simp_all
+  subst hgf
+  rw [derivative_mul, dvd_add_left (dvd_mul_right _ _), ← key hg0] at hgdf
+  simpa only [eval_mul, mul_eq_zero, or_iff_right_iff_imp]
+
 end Polynomial
 
 variable {K : Type*} [CommRing K]
@@ -359,6 +366,8 @@ theorem leadingCoeff_neg : ∀ {n : ℕ} (p : Poly (n+1)), (-p).leadingCoeff = -
   | _, constAddXMul p q => by
     rw [leadingCoeff, ← leadingCoeff_neg, constAddXMul_neg, leadingCoeff]
 
+mutual
+
 def gcd : ∀ {n : ℕ} (p q : Poly n),
     Poly n × --the gcd
     Poly n × --p / gcd
@@ -366,16 +375,6 @@ def gcd : ∀ {n : ℕ} (p q : Poly n),
   | 0, ofInt' x, ofInt' y => _
   | n+1, _, _ => sorry
 
-
-
--- letI := Classical.decEq R
---     if h : degree q ≤ degree p ∧ p ≠ 0 then
---       let z := C (leadingCoeff p) * X ^ (natDegree p - natDegree q)
---       have _wf := div_wf_lemma h hq
---       let dm := divModByMonicAux (p - q * z) hq
---       ⟨z + dm.1, dm.2⟩
---     else ⟨0, p⟩
---   termination_by p => p
 
 /-- returns `(h, d)` such that `q.leadingCoeff ^ (degree p - degree q + 1) * p = h * q + r`,
   assuming `degree p ≤ degree q` -/
@@ -388,6 +387,19 @@ def pseudoModDiv (p q : Poly (n+1)) : (Poly (n+1) × Poly (n+1)) :=
     let dm := pseudoModDiv (const q.leadingCoeff * p - q * z) q
     ⟨z + dm.1, dm.2⟩
   else ⟨0, p⟩
+
+end
+
+
+-- letI := Classical.decEq R
+--     if h : degree q ≤ degree p ∧ p ≠ 0 then
+--       let z := C (leadingCoeff p) * X ^ (natDegree p - natDegree q)
+--       have _wf := div_wf_lemma h hq
+--       let dm := divModByMonicAux (p - q * z) hq
+--       ⟨z + dm.1, dm.2⟩
+--     else ⟨0, p⟩
+--   termination_by p => p
+
 
 
 
