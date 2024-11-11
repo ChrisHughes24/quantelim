@@ -240,12 +240,15 @@ def deriv : ∀ {n : ℕ}, Poly (n + 1) → Poly (n + 1)
   | _, constAddXMul _ q => q + constAddXMul' 0 (deriv q)
   | _, _ => 0
 
-def X : Poly (n + 1) := constAddXMul 0 1
+def X : ∀ {n : ℕ}, Fin n → Poly n
+  | _+1, ⟨0, _⟩ => constAddXMul 0 1
+  | _+1, ⟨i+1, h⟩ => const (X ⟨i, Nat.lt_of_succ_lt_succ h⟩)
 
 @[simp]
-theorem eval_X {n : ℕ} (vars : Fin (n+1) → K) :
-    eval (X : Poly (n+1)) vars = vars 0 := by
-  simp [X, eval]
+theorem eval_X : ∀ {n : ℕ}  (i : Fin n) (vars : Fin n → K),
+    eval (X i) vars = vars i
+  | _+1, ⟨0, _⟩ => by simp
+  | _+1, ⟨i+1, h⟩ => by simp [eval_X]
 
 instance {n : ℕ} : NatPow (Poly n) := ⟨fun p n => (.*p)^[n] 1⟩
 
@@ -329,11 +332,6 @@ theorem degree_mulConstMulXPow :  ∀ {n : ℕ} (p : Poly n) (m : ℕ) (q : Poly
   | _, p, m+1, q => by
     rw [mulConstMulXPow, degree, degree_mulConstMulXPow, add_assoc]
 
-noncomputable def toMvPoly {n : ℕ} (p : Poly n) : MvPolynomial (Fin n) ℤ := eval p MvPolynomial.X
-
-noncomputable def toPoly {n : ℕ} (p : Poly (n+1)) : Polynomial (MvPolynomial (Fin n) ℤ) :=
-  eval p (Fin.cons Polynomial.X (fun i => Polynomial.C (MvPolynomial.X i)))
-
 open Poly
 
 theorem gcd_mod_wf {p q : Poly (n+1)} (lpd lqd : Poly n) (h : q.degree ≤ p.degree)
@@ -405,11 +403,51 @@ def pseudoModDiv : ∀ {n : ℕ} (p q : Poly (n+1)), (Poly n × Poly (n+1) ×
       let z := (mulConstMulXPow lpd (dp - dq) q).eraseLead
       have wf := gcd_mod_wf lpd lqd h hq0
       let (k, h, r) := pseudoModDiv ((mulConstMulXPow lqd 0 p).eraseLead - z) q
-      (k * lqd, h + const (k * lpd) * X^(dp - dq), r)
+      (k * lqd, h + const (k * lpd) * X 0 ^(dp - dq), r)
   else (1, 0, ⟨p, ⟨fun _ => lt_of_not_ge h, fun hq0 => by simp [dp, dq, hq0] at h⟩⟩)
   termination_by n p => (n+1, 1, degree p)
 
 end
+
+theorem hom_ext {R : Type*} [CommRing R] {f g : Poly n → R}
+    (hf₁ : ∀ ):
+
+noncomputable def toMvPoly {n : ℕ} (p : Poly n) : MvPolynomial (Fin n) ℤ := eval p MvPolynomial.X
+
+noncomputable def toPoly {n : ℕ} (p : Poly (n+1)) : Polynomial (MvPolynomial (Fin n) ℤ) :=
+  (toMvPoly p).eval₂ (Int.castRingHom _)
+  (Fin.cons Polynomial.X (fun i => Polynomial.C (MvPolynomial.X i)))
+
+theorem eval₂_toMvPoly {R : Type} [CommRing R] {n : ℕ} (p : Poly n) (vars : Fin n → R) (f) :
+    (toMvPoly p).eval₂ (f) vars = p.eval vars := by
+  induction p with
+  | ofInt' x =>
+    rw [toMvPoly, ← MvPolynomial.coe_eval₂Hom, eval, map_intCast, eval]
+  | const p ih =>
+    rw [eval, ← ih]
+    simp [toMvPoly]
+
+
+@[simp]
+theorem toMvPoly_X {n : ℕ} : toMvPoly (X : Poly (n+1)) = MvPolynomial.X 0 := by
+  simp [X, toMvPoly]
+
+@[simp]
+theorem toMvPoly_const {n : ℕ} (p : Poly n) : toMvPoly (const p) =
+    (toMvPoly p).rename Fin.succ := by
+  induction p with
+  | ofInt' => simp [toMvPoly]
+  | const p ih =>
+      rw [toMvPoly, eval]
+
+@[simp]
+theorem toPoly_X {n : ℕ} : toPoly (X : Poly (n+1)) = Polynomial.X := by
+  simp [toPoly]
+
+@[simp]
+theorem toPoly_const {n : ℕ} (p : Poly n) : toPoly (const p) = Polynomial.C (toMvPoly p) := by
+    simp [toPoly]
+    induction p <;> simp_all [eval]
 
 mutual
 
