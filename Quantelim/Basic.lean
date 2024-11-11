@@ -127,6 +127,10 @@ theorem eval_constAddXMul' {n : ℕ} (p : Poly n) (q : Poly (n + 1)) (vars : Fin
   split_ifs <;>
   simp_all [eval]
 
+theorem apply_eval {S : Type*} [CommRing S] (f : K →+* S) (vars : Fin n → K) (p : Poly n) :
+    f (p.eval vars) = p.eval (fun i => f (vars i)) := by
+  induction p <;> simp_all
+
 def add : {n : ℕ} → Poly n → Poly n → Poly n
   | _, ofInt' x, ofInt' y => ofInt' (x + y)
   | _, const p, const q => const (add p q)
@@ -349,14 +353,11 @@ theorem gcd_mod_wf {p q : Poly (n+1)} (lpd lqd : Poly n) (h : q.degree ≤ p.deg
 mutual
 
 def contPrim : ∀ {n : ℕ} (p : Poly (n+1)), Poly n × Poly (n+1)
-  | 0, const (ofInt' x) => (ofInt' x, 1)
-  | _+1, const p =>
-    let (pc, pp) := contPrim p
-    (const pc, const pp)
+  | _, const p => (p, 1)
   | _, constAddXMul p q =>
     let (c, q') := contPrim q
     let (g, a, b) := gCd p c
-    (g, const a + const b * q')
+    (g, const a + X 0 * const b * q')
   termination_by n p => (n+1, 0, sizeOf p)
 
 -- This returns the gcd
@@ -380,7 +381,6 @@ def gCd : ∀ {n : ℕ} (p q : Poly n),
           · simp only [add_lt_add_iff_left]
             exact hr.1 (Nat.pos_iff_ne_zero.2 hq0)
       let (g, a, b) := gCd q r
-      -- Probably not correct, `g * (h * a + b) = k * pp`, so need to divide by k. It is divisible by `k`.
       let v := (pseudoModDiv (h * a + b) (const k)) -- v.1 is `1` or `-1` so multiplying is dividing.
       (g, v.2.1 * const v.1, a)
   termination_by n _ q => (n, 2, if q = 0 then 0 else 1 + degree q)
@@ -409,70 +409,95 @@ def pseudoModDiv : ∀ {n : ℕ} (p q : Poly (n+1)), (Poly n × Poly (n+1) ×
 
 end
 
-theorem hom_ext {R : Type*} [CommRing R] {f g : Poly n → R}
-    (hf₁ : ∀ ):
-
 noncomputable def toMvPoly {n : ℕ} (p : Poly n) : MvPolynomial (Fin n) ℤ := eval p MvPolynomial.X
 
 noncomputable def toPoly {n : ℕ} (p : Poly (n+1)) : Polynomial (MvPolynomial (Fin n) ℤ) :=
-  (toMvPoly p).eval₂ (Int.castRingHom _)
-  (Fin.cons Polynomial.X (fun i => Polynomial.C (MvPolynomial.X i)))
+  p.eval (Fin.cons Polynomial.X (fun i => Polynomial.C (MvPolynomial.X i)))
+
+noncomputable def polyToMvPoly : Polynomial (MvPolynomial (Fin n) ℤ) →+* MvPolynomial (Fin (n+1)) ℤ :=
+  Polynomial.eval₂RingHom (MvPolynomial.eval₂Hom (Int.castRingHom _)
+    (fun i => MvPolynomial.X i.succ)) (MvPolynomial.X 0)
 
 theorem eval₂_toMvPoly {R : Type} [CommRing R] {n : ℕ} (p : Poly n) (vars : Fin n → R) (f) :
     (toMvPoly p).eval₂ (f) vars = p.eval vars := by
-  induction p with
-  | ofInt' x =>
-    rw [toMvPoly, ← MvPolynomial.coe_eval₂Hom, eval, map_intCast, eval]
-  | const p ih =>
-    rw [eval, ← ih]
-    simp [toMvPoly]
-
+  rw [toMvPoly, ← MvPolynomial.coe_eval₂Hom, apply_eval]
+  simp
 
 @[simp]
-theorem toMvPoly_X {n : ℕ} : toMvPoly (X : Poly (n+1)) = MvPolynomial.X 0 := by
+theorem toMvPoly_X {n : ℕ} (i : Fin n) : toMvPoly (X i) = MvPolynomial.X i := by
   simp [X, toMvPoly]
 
 @[simp]
 theorem toMvPoly_const {n : ℕ} (p : Poly n) : toMvPoly (const p) =
     (toMvPoly p).rename Fin.succ := by
-  induction p with
-  | ofInt' => simp [toMvPoly]
-  | const p ih =>
-      rw [toMvPoly, eval]
+  simp only [toMvPoly, eval]
+  rw [← AlgHom.coe_toRingHom, apply_eval]
+  simp
 
 @[simp]
-theorem toPoly_X {n : ℕ} : toPoly (X : Poly (n+1)) = Polynomial.X := by
+theorem toPoly_X_zero {n : ℕ} : toPoly (X 0 : Poly (n+1)) = Polynomial.X := by
+  simp [toPoly]
+
+@[simp]
+theorem toPoly_X_succ {n : ℕ} (i : Fin n) : toPoly (X i.succ) = Polynomial.C (MvPolynomial.X i) := by
   simp [toPoly]
 
 @[simp]
 theorem toPoly_const {n : ℕ} (p : Poly n) : toPoly (const p) = Polynomial.C (toMvPoly p) := by
-    simp [toPoly]
-    induction p <;> simp_all [eval]
+  rw [toPoly, eval, toMvPoly, apply_eval]
+  simp
+
+@[simp]
+theorem toPoly_constAddXMul {n : ℕ} (p : Poly n) (q : Poly (n+1)) : toPoly (constAddXMul p q) = Polynomial.C (toMvPoly p) +
+    Polynomial.X * toPoly q  := by
+  simp only [toPoly, eval, toMvPoly, apply_eval]
+  simp
 
 mutual
 
 theorem toPoly_contPrim : ∀ {n : ℕ} (p : Poly (n+1)),
     let cp := contPrim p
     toMvPoly cp.1 • toPoly cp.2 = toPoly p ∧ (toPoly cp.2).IsPrimitive
-  | 0, const (ofInt' x) => by
-    simp [contPrim, toPoly, toMvPoly, Polynomial.smul_eq_C_mul]
-  | _+1, const p => by
-    simp [contPrim]
-    have := toPoly_contPrim p
-    dsimp at this
-  | _, constAddXMul p q =>
-    let (c, q') := contPrim q
-    let (g, a, b) := gCd p c
-    (g, const a + const b * q')
-
-
+  | _, const p => by
+    simp [contPrim, toPoly, toMvPoly, Polynomial.smul_eq_C_mul, apply_eval]
+  | _, constAddXMul p q => by
+    have ih := toPoly_contPrim q
+    have ih_gcd := toMvPoly_gCd p q.contPrim.1
+    simp only at ih_gcd
+    simp only [contPrim, toPoly_constAddXMul] at ih ⊢
+    rw [← ih.1]
+    refine ⟨?_, ?_⟩
+    · rw [← ih_gcd.1, ← ih_gcd.2.1]
+      simp only [toMvPoly, toPoly, map_mul, apply_eval, eval, eval_zero,
+        Polynomial.smul_eq_C_mul, eval_add, eval_mul, zero_add, eval_ofInt]
+      simp [mul_add, add_mul, add_comm, add_left_comm, add_assoc, mul_assoc,
+        mul_comm, mul_left_comm]
+    · admit
   termination_by n p => (n+1, 0, sizeOf p)
 
 theorem toMvPoly_gCd : ∀ {n : ℕ} (p q : Poly n),
     let (g, a, b) := gCd p q
     toMvPoly g * toMvPoly a = toMvPoly p ∧
     toMvPoly g * toMvPoly b = toMvPoly q ∧
-    ∀ k : MvPolynomial (Fin n) ℤ, k ∣ toMvPoly p → k ∣ toMvPoly q → k ∣ toMvPoly g := sorry
+    ∀ k : MvPolynomial (Fin n) ℤ, k ∣ toMvPoly p → k ∣ toMvPoly q → k ∣ toMvPoly g
+  | 0, ofInt' x, ofInt' y => by
+    simp only [toMvPoly, gCd, eval_intCast, Int.cast_natCast, eval]
+  | n+1, p, q =>
+    if hq0 : q = 0 then sorry
+    else
+      let (pc, pp) := contPrim p
+      let (k, h, ⟨r, hr⟩) := pseudoModDiv pp q
+      have _wf : (if (r : Poly (n+1)) = 0 then 0 else 1 + (r : Poly (n+1)).degree) <
+          (if q = 0 then 0 else 1 + q.degree) := by
+        split_ifs with hr0
+        · simp_all
+        · by_cases hq0 : q.degree = 0
+          · simp_all
+          · simp only [add_lt_add_iff_left]
+            exact hr.1 (Nat.pos_iff_ne_zero.2 hq0)
+      let (g, a, b) := gCd q r
+      let v := (pseudoModDiv (h * a + b) (const k)) -- v.1 is `1` or `-1` so multiplying is dividing.
+      sorry
   termination_by n _ q => (n, 2, if q = 0 then 0 else 1 + degree q)
 
 theorem toPoly_pseudoModDiv :  ∀ {n : ℕ} (p q : Poly (n+1)),
