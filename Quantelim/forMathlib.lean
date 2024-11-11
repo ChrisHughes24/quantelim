@@ -59,6 +59,7 @@ theorem key_one_way {R : Type*} [CommRing R] [IsDomain R] [CharZero R] {f g : R[
   simp [add_assoc]
 
 variable {K : Type*} [Field K] [CharZero K] [IsAlgClosed K]
+
 theorem key {f g : K[X]} (hf0 : f ≠ 0) :
     (∀ x, f.eval x = 0 → g.eval x = 0) ↔ f ∣ f.derivative * g := by
   refine ⟨?_, key_one_way hf0⟩

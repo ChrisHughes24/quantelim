@@ -272,7 +272,7 @@ theorem eval_pow {n : ℕ} (p : Poly n) (m : ℕ) (vars : Fin n → K) :
 theorem degree_pos_of_eraseLead_ne_zero : ∀ {n : ℕ} {p : Poly n}, p.eraseLead ≠ 0 → 0 < p.degree
   | _, ofInt' _ => by simp [eraseLead]
   | _, const _ => by simp [eraseLead]
-  | _, constAddXMul _ _ => by simp [degree]
+  | _, constAddXMul _ _ => by simp [degree, eraseLead]
 
 theorem degree_eraseLead : ∀ {n : ℕ} (p : Poly n), degree (eraseLead p) ≤ degree p - 1
   | _, ofInt' _ => by simp [degree]
@@ -329,42 +329,10 @@ theorem degree_mulConstMulXPow :  ∀ {n : ℕ} (p : Poly n) (m : ℕ) (q : Poly
   | _, p, m+1, q => by
     rw [mulConstMulXPow, degree, degree_mulConstMulXPow, add_assoc]
 
+noncomputable def toMvPoly {n : ℕ} (p : Poly n) : MvPolynomial (Fin n) ℤ := eval p MvPolynomial.X
 
--- /-- returns `p * cp - q * cp * X^m` assuming `leadingCoeff p * cp = leadingCoeff q * cq` and
--- `m = degree p - degree q` where `degree q ≤ degree p` -/
--- def mulConstSubXPowMulConst : ∀ {n : ℕ} (p q : Poly (n+1)) (cp cq : Poly n) (m : ℕ),
---     {r : Poly (n+1) // degree r ≤ degree p - 1 ∧
---       leadingCoeff p * cp = leadingCoeff q * cq → m + degree q = degree p →
---       ∀ {R : Type} [CommRing R] (vars : Fin (n+1) → R),
---         eval r vars = eval (const cp * p - const cq * q * X^m) vars }
---   | _, const _, _, _, _, _ => ⟨0, by
---     simp only [degree, zero_le, Nat.sub_eq_zero_of_le, le_refl, leadingCoeff, true_and,
---       AddLeftCancelMonoid.add_eq_zero, Int.cast_zero,
---       Int.cast_one, mul_one, zero_add, and_imp]
---     rintro h rfl hd R _ vars
---     simp
-
---     ⟩
---   | _, constAddXMul p₁ p₂, q, cp, cq, m+1 => constAddXMul' (cp * p₁) (mulConstSubXPowMulConst p₂ q cp cq m)
---   | _, constAddXMul _ _, const _, _, _, 0 => 0
---   | _, constAddXMul p₁ p₂, constAddXMul q₁ q₂, cp, cq, 0 =>
---     constAddXMul' (cp * p₁ - cq * q₁) (mulConstSubXPowMulConst p₂ q₂ cp cq 0)
-
--- theorem degree_mulConstSubXPowMulConst_lt :
---     ∀ {n : ℕ} (p q : Poly (n+1)) (cp cq : Poly n) (m : ℕ),
---     degree (mulConstSubXPowMulConst p q cp cq m) < degree p
---   | _, const _, _, _, _, _ => by simp [mulConstSubXPowMulConst]
---   | _, constAddXMul p₁ p₂, q, cp, cq, m+1 => constAddXMul' (cp * p₁) (mulConstSubXPowMulConst p₂ q cp cq m)
---   | _, constAddXMul _ _, const _, _, _, 0 => 0
---   | _, constAddXMul p₁ p₂, constAddXMul q₁ q₂, cp, cq, 0 =>
---     constAddXMul' (cp * p₁ - cq * q₁) (mulConstSubXPowMulConst p₂ q₂ cp cq 0)
-
-noncomputable def toMvPoly (p : Poly n) : MvPolynomial (Fin n) ℤ := eval p MvPolynomial.X
-
-noncomputable def toPoly (p : Poly (n+1)) : Polynomial (MvPolynomial (Fin n) ℤ) :=
+noncomputable def toPoly {n : ℕ} (p : Poly (n+1)) : Polynomial (MvPolynomial (Fin n) ℤ) :=
   eval p (Fin.cons Polynomial.X (fun i => Polynomial.C (MvPolynomial.X i)))
-
-end Poly
 
 open Poly
 
@@ -379,43 +347,105 @@ theorem gcd_mod_wf {p q : Poly (n+1)} (lpd lqd : Poly n) (h : q.degree ≤ p.deg
     exact lt_of_lt_of_le (Nat.sub_lt_self zero_lt_one (le_trans (Nat.one_le_iff_ne_zero.2 hq0) h)) le_rfl
   · erw [degree_mulConstMulXPow, Nat.add_sub_cancel' h]
     exact Nat.sub_lt_self zero_lt_one (le_trans (Nat.one_le_iff_ne_zero.2 hq0) h)
-#print Nat.gcd
+
 mutual
 
-def gcd : ∀ {n : ℕ} (p q : Poly n),
+def contPrim : ∀ {n : ℕ} (p : Poly (n+1)), Poly n × Poly (n+1)
+  | 0, const (ofInt' x) => (ofInt' x, 1)
+  | _+1, const p =>
+    let (pc, pp) := contPrim p
+    (const pc, const pp)
+  | _, constAddXMul p q =>
+    let (c, q') := contPrim q
+    let (g, a, b) := gCd p c
+    (g, const a + const b * q')
+  termination_by n p => (n+1, 0, sizeOf p)
+
+-- This returns the gcd
+def gCd : ∀ {n : ℕ} (p q : Poly n),
     Poly n × --the gcd
     Poly n × --p / gcd
     Poly n -- q / gcd
   | 0, ofInt' x, ofInt' y => ⟨(Int.gcd x y : ℤ),
     (x / Int.gcd x y : ℤ), (y / Int.gcd x y : ℤ)⟩
   | n+1, p, q =>
-     let (k, h, r) := pseudoModDiv p q
-     gcd p r
-  termination_by n p q => (1, degree q)
+    if hq0 : q = 0 then (p, 1, 0)
+    else
+      let (pc, pp) := contPrim p
+      let (k, h, ⟨r, hr⟩) := pseudoModDiv pp q
+      have _wf : (if (r : Poly (n+1)) = 0 then 0 else 1 + (r : Poly (n+1)).degree) <
+          (if q = 0 then 0 else 1 + q.degree) := by
+        split_ifs with hr0
+        · simp_all
+        · by_cases hq0 : q.degree = 0
+          · simp_all
+          · simp only [add_lt_add_iff_left]
+            exact hr.1 (Nat.pos_iff_ne_zero.2 hq0)
+      let (g, a, b) := gCd q r
+      -- Probably not correct, `g * (h * a + b) = k * pp`, so need to divide by k. It is divisible by `k`.
+      let v := (pseudoModDiv (h * a + b) (const k)) -- v.1 is `1` or `-1` so multiplying is dividing.
+      (g, v.2.1 * const v.1, a)
+  termination_by n _ q => (n, 2, if q = 0 then 0 else 1 + degree q)
 
-
-/-- returns `(k, h, r)` such that `k * p = h * q + r`, and `k` and `q` are relatively prime and
-`degree r < degree q` provided ... -/
-def pseudoModDiv : ∀ (p q : Poly (n+1)), (Poly n × Poly (n+1) × Poly (n+1)) :=
+/-- returns `(k, h, r)` such that `k * p = h * q + r`, `k` and `h` are relatively prime
+If `q ∣ p` then `k = 1 or -1` and `r = 0` -/
+def pseudoModDiv : ∀ {n : ℕ} (p q : Poly (n+1)), (Poly n × Poly (n+1) ×
+    {r : Poly (n+1) // (0 < q.degree → r.degree < q.degree) ∧ (q.degree = 0 → r = 0)}) :=
   fun p q =>
   let dp := degree p
   let dq := degree q
   let lp := p.leadingCoeff
   let lq := q.leadingCoeff
-  let (g, lpd, lqd) := gcd lp lq
-  if hp0 : p = 0 then (1, 0, 0)
-  else if h : dq ≤ dp
-  then
-    if hq0 : q.degree = 0 then (lqd, const lpd, 0)
+  let (g, lpd, lqd) := gCd lp lq
+  if h : degree q ≤ degree p then
+  if hp0 : p = 0 then (1, 0, ⟨0, by simp [degree]⟩ )
+  else
+    if hq0 : q.degree = 0 then (lqd, const lpd, ⟨0, by simp [degree]⟩)
     else
       let z := (mulConstMulXPow lpd (dp - dq) q).eraseLead
       have wf := gcd_mod_wf lpd lqd h hq0
       let (k, h, r) := pseudoModDiv ((mulConstMulXPow lqd 0 p).eraseLead - z) q
-      (k * lqd, h + const (k * lpd) * X^n, r)
-  else (1, 0, p)
-  termination_by p q => (0, degree p)
+      (k * lqd, h + const (k * lpd) * X^(dp - dq), r)
+  else (1, 0, ⟨p, ⟨fun _ => lt_of_not_ge h, fun hq0 => by simp [dp, dq, hq0] at h⟩⟩)
+  termination_by n p => (n+1, 1, degree p)
 
 end
+
+mutual
+
+theorem toPoly_contPrim : ∀ {n : ℕ} (p : Poly (n+1)),
+    let cp := contPrim p
+    toMvPoly cp.1 • toPoly cp.2 = toPoly p ∧ (toPoly cp.2).IsPrimitive
+  | 0, const (ofInt' x) => by
+    simp [contPrim, toPoly, toMvPoly, Polynomial.smul_eq_C_mul]
+  | _+1, const p => by
+    simp [contPrim]
+    have := toPoly_contPrim p
+    dsimp at this
+  | _, constAddXMul p q =>
+    let (c, q') := contPrim q
+    let (g, a, b) := gCd p c
+    (g, const a + const b * q')
+
+
+  termination_by n p => (n+1, 0, sizeOf p)
+
+theorem toMvPoly_gCd : ∀ {n : ℕ} (p q : Poly n),
+    let (g, a, b) := gCd p q
+    toMvPoly g * toMvPoly a = toMvPoly p ∧
+    toMvPoly g * toMvPoly b = toMvPoly q ∧
+    ∀ k : MvPolynomial (Fin n) ℤ, k ∣ toMvPoly p → k ∣ toMvPoly q → k ∣ toMvPoly g := sorry
+  termination_by n _ q => (n, 2, if q = 0 then 0 else 1 + degree q)
+
+theorem toPoly_pseudoModDiv :  ∀ {n : ℕ} (p q : Poly (n+1)),
+    let (k, h, r) := pseudoModDiv p q
+    toMvPoly k • toPoly p = toPoly h * toPoly q + toPoly r
+    ∧ toPoly q ∣ toPoly p → k = 1 ∨ k = -1 := sorry
+  termination_by n p => (n+1, 1, degree p)
+
+end
+
+end Poly
 
 open Poly
 
@@ -432,6 +462,6 @@ def eval {n : ℕ} (φ : Ands n) (vars : Fin (n+1) → ℂ) : Prop :=
 
 
 
-def reduceEqs {n : ℕ} (φ : Ands n) : Ands n × Ands n := sorry
+--def reduceEqs {n : ℕ} (φ : Ands n) : Ands n × Ands n := sorry
 
 end Ands
