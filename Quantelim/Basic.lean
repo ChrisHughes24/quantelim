@@ -366,7 +366,7 @@ def gCd : ∀ {n : ℕ} (p q : Poly n),
     Poly n × --p / gcd
     Poly n -- q / gcd
   | 0, ofInt' x, ofInt' y => ⟨(Int.gcd x y : ℤ),
-    (x / Int.gcd x y : ℤ), (y / Int.gcd x y : ℤ)⟩
+    (x.tdiv <| Int.gcd x y : ℤ), (y.tdiv <| Int.gcd x y : ℤ)⟩
   | n+1, p, q =>
     if hq0 : q = 0 then (p, 1, 0)
     else
@@ -453,6 +453,19 @@ theorem toPoly_constAddXMul {n : ℕ} (p : Poly n) (q : Poly (n+1)) : toPoly (co
   simp only [toPoly, eval, toMvPoly, apply_eval]
   simp
 
+@[simp]
+theorem toPoly_add {n : ℕ} (p q : Poly (n+1)) : toPoly (p + q) = toPoly p + toPoly q :=
+  eval_add _ _ _
+
+@[simp]
+theorem toPoly_mul {n : ℕ} (p q : Poly (n+1)) : toPoly (p * q) = toPoly p * toPoly q :=
+  eval_mul _ _ _
+
+@[simp]
+theorem toMvPoly_one {n : ℕ} : toMvPoly (1 : Poly n) = 1 := eval_one _
+#print Int.tdiv
+open Polynomial
+
 mutual
 
 theorem toPoly_contPrim : ∀ {n : ℕ} (p : Poly (n+1)),
@@ -460,7 +473,9 @@ theorem toPoly_contPrim : ∀ {n : ℕ} (p : Poly (n+1)),
     toMvPoly cp.1 • toPoly cp.2 = toPoly p ∧ (toPoly cp.2).IsPrimitive
   | _, const p => by
     simp [contPrim, toPoly, toMvPoly, Polynomial.smul_eq_C_mul, apply_eval]
-  | _, constAddXMul p q => by
+  | i, constAddXMul p q => by
+    let _ := UniqueFactorizationMonoid.toNormalizedGCDMonoid
+    let _ := @UniqueFactorizationMonoid.normalizationMonoid
     have ih := toPoly_contPrim q
     have ih_gcd := toMvPoly_gCd p q.contPrim.1
     simp only at ih_gcd
@@ -472,21 +487,50 @@ theorem toPoly_contPrim : ∀ {n : ℕ} (p : Poly (n+1)),
         Polynomial.smul_eq_C_mul, eval_add, eval_mul, zero_add, eval_ofInt]
       simp [mul_add, add_mul, add_comm, add_left_comm, add_assoc, mul_assoc,
         mul_comm, mul_left_comm]
-    · admit
+    · intro k hk
+      rcases h : q.contPrim with ⟨qc, qp⟩
+      rcases hg : p.gCd qc with ⟨g, a, b⟩
+      simp only [h, hg, toPoly_add, toPoly_mul, toPoly_X_zero, C_dvd_iff_dvd_coeff] at ih ih_gcd hk
+      have hka : k ∣ a.toMvPoly := by simpa using hk 0
+      replace hk := fun i => hk (i+1)
+      simp only [toPoly_const, X_mul_C, coeff_add, coeff_C_succ, zero_add,
+        ← mul_assoc, mul_right_comm _ (Polynomial.X), coeff_mul_X,
+        ← C_dvd_iff_dvd_coeff] at hk
+      rw [← dvd_content_iff_C_dvd, content_mul, content_C] at hk
+      replace hk := dvd_mul_gcd_of_dvd_mul hk
+      let m := gcd k qp.toPoly.content
+      have := ih.2 m (dvd_content_iff_C_dvd.1 (gcd_dvd_right _ _))
+      replace hk := (IsUnit.dvd_mul_right this).1 hk
+      rw [dvd_normalize_iff] at hk
+      have := ih_gcd.2.2.1 (k * g.toMvPoly)
+      by_cases hg0 : g.toMvPoly = 0
+      · simp_all [eq_comm]
+        exact isUnit_of_dvd_one hka
+      rw [← ih_gcd.1, ← ih_gcd.2.1, mul_comm k, mul_dvd_mul_iff_left hg0,
+        mul_dvd_mul_iff_left hg0] at this
+      have := this hka hk
+      have : g.toMvPoly * k ∣ g.toMvPoly * 1 := by simpa
+      rw [mul_dvd_mul_iff_left hg0] at this
+      exact isUnit_of_dvd_one this
   termination_by n p => (n+1, 0, sizeOf p)
 
 theorem toMvPoly_gCd : ∀ {n : ℕ} (p q : Poly n),
     let (g, a, b) := gCd p q
     toMvPoly g * toMvPoly a = toMvPoly p ∧
     toMvPoly g * toMvPoly b = toMvPoly q ∧
-    ∀ k : MvPolynomial (Fin n) ℤ, k ∣ toMvPoly p → k ∣ toMvPoly q → k ∣ toMvPoly g
+    (∀ k : MvPolynomial (Fin n) ℤ, k ∣ toMvPoly p → k ∣ toMvPoly q → k ∣ toMvPoly g) ∧
+    (toMvPoly p = 0 → a = 1)
   | 0, ofInt' x, ofInt' y => by
-    simp only [toMvPoly, gCd, eval_intCast, Int.cast_natCast, eval]
+    simp only [toMvPoly, gCd, eval_intCast, eval, ← Int.cast_mul,
+      Int.mul_tdiv_cancel' (Int.gcd_dvd_left), true_and,
+      Int.mul_tdiv_cancel' (Int.gcd_dvd_right)]
+    admit
   | n+1, p, q =>
-    if hq0 : q = 0 then sorry
-    else
-      let (pc, pp) := contPrim p
-      let (k, h, ⟨r, hr⟩) := pseudoModDiv pp q
+    if hq0 : q = 0 then by
+      simp [hq0, gCd, toMvPoly]
+    else by
+      rcases hcp : contPrim p with ⟨pc, pp⟩
+      rcases hmd : pseudoModDiv pp q with ⟨k, h, ⟨r, hr⟩⟩
       have _wf : (if (r : Poly (n+1)) = 0 then 0 else 1 + (r : Poly (n+1)).degree) <
           (if q = 0 then 0 else 1 + q.degree) := by
         split_ifs with hr0
@@ -496,8 +540,10 @@ theorem toMvPoly_gCd : ∀ {n : ℕ} (p q : Poly n),
           · simp only [add_lt_add_iff_left]
             exact hr.1 (Nat.pos_iff_ne_zero.2 hq0)
       let (g, a, b) := gCd q r
-      let v := (pseudoModDiv (h * a + b) (const k)) -- v.1 is `1` or `-1` so multiplying is dividing.
-      sorry
+      by
+        simp
+
+
   termination_by n _ q => (n, 2, if q = 0 then 0 else 1 + degree q)
 
 theorem toPoly_pseudoModDiv :  ∀ {n : ℕ} (p q : Poly (n+1)),
