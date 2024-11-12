@@ -1030,7 +1030,9 @@ def pseudoModDiv : ∀ {n : ℕ} (p q : Poly (n+1)), (ℕ × Poly (n+1) ×
   if hp0 : p = 0 then (0, 0, ⟨0, by
     simp [WithBot.bot_lt_iff_ne_bot]
     rw [← Ne, ← degree_nonneg_iff_ne_zero]
-    admit⟩)
+    intro h h1
+    rw [h1] at h
+    simp at h⟩)
   else if hq0 : q = 0 then ⟨1, 0, ⟨0, by simp_all⟩⟩
   else
     let z := (const lp * X 0 ^ (dp - dq) * q)
