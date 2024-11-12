@@ -70,12 +70,24 @@ def interpret : {n : ℕ} → Formula n → (vars : Fin n → K) → Prop
 end Formula
 
 /-- Polynomials in n variables as a polynomial in var 0 over the ring of polynomials in the remaining variables -/
-inductive Poly : (n : ℕ) → Type
-  | ofInt' : ℤ  → Poly 0
-  | const : Poly n → Poly (n+1)
+inductive PolyAux : (n : ℕ) → Type
+  | ofInt' : ℤ  → PolyAux 0
+  | const : PolyAux n → PolyAux (n+1)
   -- Never use when second part is zero
-  | constAddXMul : Poly n → Poly (n + 1) → Poly (n + 1)
+  | constAddXMul : PolyAux n → PolyAux (n + 1) → PolyAux (n + 1)
   deriving DecidableEq
+
+def PolyAux.zero : ∀ {n : ℕ}, PolyAux n
+  | 0 => ofInt' 0
+  | _+1 => const PolyAux.zero
+
+inductive PolyAux.Good : {n : ℕ} → PolyAux n → Prop
+  | ofInt' : ∀ (x : ℤ), Good (ofInt' x)
+  | const : ∀ p : PolyAux n, Good p → Good p.const
+  | constAddXMul : ∀ (p : PolyAux n)
+      (q : PolyAux (n+1)), Good p → Good q → q ≠ PolyAux.zero → Good (constAddXMul p q)
+
+def Poly (n : ℕ) : Type := { p : PolyAux n // p.Good }
 
 namespace Poly
 
@@ -236,6 +248,7 @@ def leadingMon : ∀ {n : ℕ}, Poly n → Vector ℕ n
     match leadingMon q with
     | ⟨n :: l, h⟩ => ⟨(n+1) :: l, h⟩
 
+@[simp]
 def degree : ∀ {n : ℕ}, Poly n → ℕ
   | _, ofInt' _ => 0
   | _, const _ => 0
@@ -407,10 +420,14 @@ def pseudoModDiv : ∀ {n : ℕ} (p q : Poly (n+1)), (ℕ × Poly (n+1) ×
   else (0, 0, ⟨p, ⟨fun _ => lt_of_not_ge h, fun hq0 => by simp [dp, dq, hq0] at h⟩⟩)
   termination_by n p => (n+1, 1, degree p)
 
+
 /-- returns `p / q` if it exists, otherwise nonsense -/
 def divDvd : ∀ {n : ℕ} (_p _q : Poly n), Poly n
   | 0, ofInt' x, ofInt' y => ofInt (x.tdiv y)
-  | _+1, p, q =>
+  | _+1, const p, const q => const (divDvd p q)
+  | _+1, constAddXMul p₁ p₂, const q => constAddXMul (divDvd p₁ q) (divDvd p₂ (const q))
+  | _+1, p, constAddXMul q₁ q₂ =>
+    let q := constAddXMul q₁ q₂
     let dp := degree p
     let dq := degree q
     let lp := p.leadingCoeff
@@ -419,14 +436,13 @@ def divDvd : ∀ {n : ℕ} (_p _q : Poly n), Poly n
     if h : degree q ≤ degree p then
     if hp0 : p = 0 then 0
     else
-      if hq0 : q.degree = 0 then const k
-      else
+      have hq0 : q.degree ≠ 0 := by simp [q, degree]
       let z := (mulConstMulXPow k (dp - dq) q).eraseLead
       have wf := div_wf k h hq0
       let v := divDvd (p.eraseLead - z) q
       v + const k * X 0 ^ (dp - dq)
     else 0
-  termination_by n p => (n+1, 1, degree p)
+  termination_by n p => (n, degree p)
 
 instance : Div (Poly n) := ⟨divDvd⟩
 
@@ -507,6 +523,13 @@ theorem toMvPoly_const {n : ℕ} (p : Poly n) : toMvPoly (const p) =
   simp
 
 @[simp]
+theorem toMvPoly_constAddXMul {n : ℕ} (p : Poly n) (q : Poly (n+1)) : toMvPoly (constAddXMul p q) =
+    (toMvPoly p).rename Fin.succ + MvPolynomial.X 0 * toMvPoly q := by
+  simp only [toMvPoly, eval]
+  rw [← AlgHom.coe_toRingHom, apply_eval]
+  simp
+
+@[simp]
 theorem toPoly_X_zero {n : ℕ} : toPoly (X 0 : Poly (n+1)) = Polynomial.X := by
   simp [toPoly]
 
@@ -560,6 +583,9 @@ theorem toMvPoly_add {n : ℕ} (p q : Poly n) : toMvPoly (p + q) = toMvPoly p + 
   eval_add _ _ _
 
 @[simp]
+theorem toMvPoly_ofInt' (z : ℤ) : toMvPoly (ofInt' z) = z := rfl
+
+@[simp]
 theorem toMvPoly_sub {n : ℕ} (p q : Poly n) : toMvPoly (p - q) = toMvPoly p - toMvPoly q :=
   eval_sub _ _ _
 
@@ -572,7 +598,6 @@ theorem toMvPoly_mul {n : ℕ} (p q : Poly n) : toMvPoly (p * q) = toMvPoly p * 
   eval_mul _ _ _
 
 open Polynomial
-
 
 theorem toPoly_pseudoModDiv :  ∀ {n : ℕ} (p q : Poly (n+1)),
     let (n, h, r) := pseudoModDiv p q
@@ -619,6 +644,38 @@ theorem toPoly_pseudoModDiv :  ∀ {n : ℕ} (p q : Poly (n+1)),
     simp only [h]
     simp
   termination_by n p => (n+1, 1, degree p)
+
+theorem toMvPoly_div : ∀ {n : ℕ} (p q : Poly n), toMvPoly q ∣ toMvPoly p →
+    toMvPoly q * (p / q).toMvPoly = p.toMvPoly
+  | 0, ofInt' x, ofInt' y, ⟨c, hc⟩ => by
+    simp only [toMvPoly_ofInt', div_def, divDvd, ofInt] at *
+    apply_fun MvPolynomial.eval (Fin.elim0) at hc
+    simp at hc
+    subst hc
+    rw [mul_comm, ← Int.cast_mul, Int.tdiv_mul_cancel]
+    simp
+  | n+1, const p, const q, ⟨c, hc⟩ => by
+      simp only [toMvPoly_const] at *
+      apply_fun (MvPolynomial.eval₂ (MvPolynomial.C) (fun (i : Fin (n+1)) =>
+        Fin.cases (n := n) 0 (fun i => (MvPolynomial.X i : MvPolynomial (Fin n) ℤ)) i)) at hc
+      simp only [MvPolynomial.eval₂_rename, Function.comp_def, Fin.cases_succ,
+        map_mul, MvPolynomial.eval₂_mul, div_def, divDvd, toMvPoly_const] at hc ⊢
+      simp only [MvPolynomial.eval₂_eta] at hc ⊢
+      have := toMvPoly_div p q ⟨_, hc⟩
+      rw [← this]
+      simp [div_def]
+  | n+1, constAddXMul p₁ p₂, const q, ⟨c, hc⟩ => by
+      simp [toMvPoly_const] at *
+      sorry
+  | _+1, p, q@(constAddXMul q₁ q₂), _ => by
+    rw [div_def, divDvd]
+    split_ifs with hqp hp0 hq0
+    · simp [hp0, toMvPoly]
+    · cases q with
+      | const q =>
+        simp only [toMvPoly_const, ← map_mul, leadingCoeff]
+        have := toMvPoly_div p.leadingCoeff q
+        erw [this]
 
 
 mutual
