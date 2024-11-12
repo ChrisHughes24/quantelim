@@ -87,6 +87,7 @@ theorem apply_eval {S : Type*} [CommRing S] (f : K →+* S) (vars : Fin n → K)
     f (p.eval vars) = p.eval (fun i => f (vars i)) := by
   induction p <;> simp_all
 
+
 def add : {n : ℕ} → PolyAux n → PolyAux n → PolyAux n
   | _, ofInt' x, ofInt' y => ofInt' (x + y)
   | _, const p, const q => const (add p q)
@@ -234,6 +235,7 @@ def X : ∀ {n : ℕ}, Fin n → PolyAux n
   | _+1, ⟨0, _⟩ => constAddXMul 0 1
   | _+1, ⟨i+1, h⟩ => const (X ⟨i, Nat.lt_of_succ_lt_succ h⟩)
 
+
 @[simp]
 theorem eval_X : ∀ {n : ℕ}  (i : Fin n) (vars : Fin n → K),
     eval (X i) vars = vars i
@@ -312,10 +314,8 @@ theorem degree_sub_le {n : ℕ} (p q : PolyAux (n+1)) : degree (p - q) ≤ max (
 
 def mulConstMulXPow : ∀ {n : ℕ} (p : PolyAux n) (m : ℕ) (q : PolyAux (n+1)), PolyAux (n+1)
   | _, p, 0, const q => const (p * q)
-  | _, p, 0, constAddXMul q r => constAddXMul' (p * q) (mulConstMulXPow p 0 r)
-  | _, p, m+1, q => constAddXMul' 0 (mulConstMulXPow p m q)
-
-theorem mulConstMulXPow
+  | _, p, 0, constAddXMul q r => constAddXMul (p * q) (mulConstMulXPow p 0 r)
+  | _, p, m+1, q => constAddXMul 0 (mulConstMulXPow p m q)
 
 @[simp]
 theorem leadingCoeff_mulConstMulXPow : ∀ {n : ℕ} (p : PolyAux n) (m : ℕ) (q : PolyAux (n+1)),
@@ -474,19 +474,19 @@ theorem good_deriv : ∀ {n : ℕ} {p : PolyAux (n+1)} (_h : Good p), Good (deri
     simp [deriv]
     exact good_ofInt
 
-theorem good_mulConstMulXPow  : ∀ {n : ℕ} {p : PolyAux n} {m : ℕ} {q : PolyAux (n+1)},
-    Good p → Good q → Good (mulConstMulXPow p m q)
-  | _, p, 0, const q, hp, hq => by
-    simp [mulConstMulXPow]
-    exact Good.const <| good_mul hp (by cases hq; assumption)
-  | _, p, 0, constAddXMul q r, hp, hq => by
-    simp [mulConstMulXPow]
-    exact Good.constAddXMul (good_mul hp (by cases hq; assumption))
-      (good_mulConstMulXPow hp (by cases hq; assumption))
-      sorry
-  | _, p, m+1, q, hp, hq => by
-    simp [mulConstMulXPow]
-    exact Good.constAddXMul good_ofInt (good_mulConstMulXPow hp hq) _
+-- theorem good_mulConstMulXPow  : ∀ {n : ℕ} {p : PolyAux n} {m : ℕ} {q : PolyAux (n+1)},
+--     Good p → Good q → Good (mulConstMulXPow p m q)
+--   | _, p, 0, const q, hp, hq => by
+--     simp [mulConstMulXPow]
+--     exact Good.const <| good_mul hp (by cases hq; assumption)
+--   | _, p, 0, constAddXMul q r, hp, hq => by
+--     simp [mulConstMulXPow]
+--     exact Good.constAddXMul (good_mul hp (by cases hq; assumption))
+--       (good_mulConstMulXPow hp (by cases hq; assumption))
+--       sorry
+--   | _, p, m+1, q, hp, hq => by
+--     simp [mulConstMulXPow]
+--     exact Good.constAddXMul good_ofInt (good_mulConstMulXPow hp hq) _
 
 theorem eq_of_sub_eq_zero : ∀ {n : ℕ} {p q : PolyAux n}, Good p → Good q →
     p.add q.neg = 0 → p = q
@@ -548,6 +548,13 @@ theorem eval_eq_zero : ∀ {n : ℕ} {p : PolyAux n}, Good p →
     funext i
     induction i using Fin.cases <;> simp
 
+theorem eval_injective {n : ℕ} {p q : PolyAux n} (hp : Good p) (hq : Good q)
+    (h : p.eval (fun i : Fin n => (MvPolynomial.X i : MvPolynomial (Fin n) ℤ)) =
+    q.eval (fun i : Fin n => (MvPolynomial.X i : MvPolynomial (Fin n) ℤ))) : p = q := by
+  apply eq_of_sub_eq_zero hp hq
+  erw [← sub_eq_zero, ← eval_sub] at h
+  exact eval_eq_zero (good_add hp (good_neg hq)) h
+
 end PolyAux
 
 def Poly (n : ℕ) : Type := { p : PolyAux n // p.Good }
@@ -594,7 +601,7 @@ theorem val_zero : ((0 : Poly n).val : PolyAux n) = 0 := rfl
 @[simp]
 theorem val_one : ((1 : Poly n).val : PolyAux n) = 1 := rfl
 
-noncomputable def ringEquivMvPoly : Poly n ≃+* MvPolynomial (Fin n) ℤ where
+private noncomputable def ringEquivMvPolyAux : Poly n ≃+* MvPolynomial (Fin n) ℤ where
   toEquiv := Equiv.ofBijective (fun p => p.1.eval (fun i : Fin n => (MvPolynomial.X i : MvPolynomial (Fin n) ℤ))) <| by
     refine ⟨fun p q h => ?_, fun f => ?_⟩
     · apply Subtype.ext
@@ -619,44 +626,44 @@ noncomputable def ringEquivMvPoly : Poly n ≃+* MvPolynomial (Fin n) ℤ where
 
 instance : CommRing (Poly n) where
   add_assoc a b c := by
-    apply ringEquivMvPoly.toEquiv.injective
+    apply ringEquivMvPolyAux.toEquiv.injective
     simp [add_assoc]
   add_comm a b := by
-    apply ringEquivMvPoly.toEquiv.injective
+    apply ringEquivMvPolyAux.toEquiv.injective
     simp [add_comm]
   add_zero a := by
-    apply ringEquivMvPoly.toEquiv.injective
-    simp [add_zero, ringEquivMvPoly]
+    apply ringEquivMvPolyAux.toEquiv.injective
+    simp [add_zero, ringEquivMvPolyAux]
   zero_add a := by
-    apply ringEquivMvPoly.toEquiv.injective
-    simp [zero_add, ringEquivMvPoly]
+    apply ringEquivMvPolyAux.toEquiv.injective
+    simp [zero_add, ringEquivMvPolyAux]
   left_distrib a b c := by
-    apply ringEquivMvPoly.toEquiv.injective
+    apply ringEquivMvPolyAux.toEquiv.injective
     simp [left_distrib]
   right_distrib a b c := by
-    apply ringEquivMvPoly.toEquiv.injective
+    apply ringEquivMvPolyAux.toEquiv.injective
     simp [right_distrib]
   zero_mul a := by
-    apply ringEquivMvPoly.toEquiv.injective
-    simp [zero_mul, ringEquivMvPoly]
+    apply ringEquivMvPolyAux.toEquiv.injective
+    simp [zero_mul, ringEquivMvPolyAux]
   mul_zero a := by
-    apply ringEquivMvPoly.toEquiv.injective
-    simp [mul_zero, ringEquivMvPoly]
+    apply ringEquivMvPolyAux.toEquiv.injective
+    simp [mul_zero, ringEquivMvPolyAux]
   mul_assoc a b c := by
-    apply ringEquivMvPoly.toEquiv.injective
+    apply ringEquivMvPolyAux.toEquiv.injective
     simp [mul_assoc]
   one_mul a := by
-    apply ringEquivMvPoly.toEquiv.injective
-    simp [one_mul, ringEquivMvPoly]
+    apply ringEquivMvPolyAux.toEquiv.injective
+    simp [one_mul, ringEquivMvPolyAux]
   mul_one a := by
-    apply ringEquivMvPoly.toEquiv.injective
-    simp [mul_one, ringEquivMvPoly]
+    apply ringEquivMvPolyAux.toEquiv.injective
+    simp [mul_one, ringEquivMvPolyAux]
   mul_comm a b := by
-    apply ringEquivMvPoly.toEquiv.injective
+    apply ringEquivMvPolyAux.toEquiv.injective
     simp [mul_comm]
   neg_add_cancel a := by
-    apply ringEquivMvPoly.toEquiv.injective
-    simp [neg_add_cancel, ringEquivMvPoly]
+    apply ringEquivMvPolyAux.toEquiv.injective
+    simp [neg_add_cancel, ringEquivMvPolyAux]
   nsmul := nsmulRec
   zsmul := zsmulRec
   natCast_succ a := by
@@ -680,6 +687,45 @@ def eval (vars : Fin n → R) : Poly n →+* R where
   map_mul' := by simp
   map_zero' := by simp
   map_add' := by simp
+
+theorem apply_eval {S : Type*} [CommRing S] (f : R →+* S) (vars : Fin n → R) (p : Poly n) :
+    f (p.eval vars) = p.eval (fun i => f (vars i)) :=
+  PolyAux.apply_eval _ _ _
+
+@[simp]
+theorem eval_X (i : Fin n) (vars : Fin n → R) : eval vars (X i) = vars i := by
+  simp [eval, val_X]
+
+noncomputable def toMvPoly {n : ℕ} : Poly n ≃+* MvPolynomial (Fin n) ℤ where
+  toFun := eval MvPolynomial.X
+  invFun := MvPolynomial.eval₂Hom (Int.castRingHom _) X
+  left_inv := Function.rightInverse_of_injective_of_leftInverse
+    (fun p q h => Subtype.ext (PolyAux.eval_injective p.2 q.2 h))
+    (fun p => by induction p using MvPolynomial.induction_on <;> simp_all)
+  right_inv := fun p => by
+    induction p using MvPolynomial.induction_on <;> simp_all
+  map_mul' := by simp
+  map_add' := by simp
+
+theorem eval_X' (p : Poly n) : p.eval X = p := by
+  apply toMvPoly.injective
+  erw [apply_eval toMvPoly.toRingHom]
+  simp [toMvPoly]
+
+@[ext high]
+theorem hom_ext {f g : Poly n →+* R} (h : ∀ i, f (X i) = g (X i)) : f = g := by
+  ext p
+  rw [← eval_X' p, apply_eval, apply_eval]
+  simp only [h]
+
+noncomputable def toPoly : Poly (n+1) ≃+* Polynomial (MvPolynomial (Fin n) ℤ) :=
+  RingEquiv.ofHomInv
+    (eval (Fin.cons Polynomial.X (fun i : Fin n => Polynomial.C (MvPolynomial.X i))) :
+       _ →+* Polynomial (MvPolynomial (Fin n) ℤ))
+    (Polynomial.eval₂RingHom
+       (MvPolynomial.eval₂Hom (Int.castRingHom _) (fun i => X i.succ)) (X 0))
+    (hom_ext (fun i => by induction i using Fin.cases <;> simp))
+    (Polynomial.ringHom_ext' (MvPolynomial.ringHom_ext (by simp) (by simp)) (by simp))
 
 def const : Poly n →+* Poly (n+1) where
   toFun := fun p => ⟨PolyAux.const p.1, PolyAux.Good.const p.2⟩
@@ -735,12 +781,6 @@ def degree {n : ℕ} (p : Poly n) : ℕ := p.1.degree
 
 def deriv {n : ℕ} (p : Poly (n+1)) : Poly (n+1) :=
   ⟨PolyAux.deriv p.1, PolyAux.good_deriv p.2⟩
-
-@[simp]
-theorem eval_X : ∀ {n : ℕ}  (i : Fin n) (vars : Fin n → K),
-    eval (X i) vars = vars i
-  | _+1, ⟨0, _⟩ => by simp
-  | _+1, ⟨i+1, h⟩ => by simp [eval_X]
 
 instance {n : ℕ} : NatPow (Poly n) := ⟨fun p n => (.*p)^[n] 1⟩
 
@@ -853,12 +893,7 @@ def gCd : ∀ {n : ℕ} (_p _q : Poly n), Poly n
 
 end
 
-@[coe]
-noncomputable def toMvPoly {n : ℕ} (p : Poly n) : MvPolynomial (Fin n) ℤ := eval p MvPolynomial.X
 
-@[coe]
-noncomputable def toPoly {n : ℕ} (p : Poly (n+1)) : Polynomial (MvPolynomial (Fin n) ℤ) :=
-  p.eval (Fin.cons Polynomial.X (fun i => Polynomial.C (MvPolynomial.X i)))
 
 noncomputable def polyToMvPoly : Polynomial (MvPolynomial (Fin n) ℤ) →+* MvPolynomial (Fin (n+1)) ℤ :=
   Polynomial.eval₂RingHom (MvPolynomial.eval₂Hom (Int.castRingHom _)
