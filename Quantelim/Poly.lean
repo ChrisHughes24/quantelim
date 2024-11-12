@@ -576,6 +576,8 @@ end PolyAux
 
 def Poly (n : ℕ) : Type := { p : PolyAux n // p.Good }
 
+instance (n : ℕ) : DecidableEq (Poly n) := by dsimp [Poly]; infer_instance
+
 namespace Poly
 
 section CommRing
@@ -970,6 +972,13 @@ theorem const_injective : Function.Injective (@const n) := by
 theorem const_eq_zero_iff {n : ℕ} (p : Poly n) : const p = 0 ↔ p = 0 :=
   map_eq_zero_iff _ const_injective
 
+theorem C_toMvPoly (p : Poly n) : Polynomial.C (toMvPoly p) = toPoly (const p) := by
+  simp [toMvPoly, toPoly, apply_eval]
+
+@[simp]
+theorem degree_zero : degree (0 : Poly (n+1)) = ⊥ := by
+  induction n <;> simp_all [degree, PolyAux.ofInt]
+
 end defs
 
 variable {n : ℕ}
@@ -995,7 +1004,8 @@ theorem modDiv_wf {p q : Poly (n+1)} (lp lq : Poly n) (h : q.degree ≤ p.degree
        map_mul, toPoly_const, map_mul, map_mul,
        map_pow, toPoly_X_zero, mul_right_comm, Polynomial.leadingCoeff_mul_X_pow,
        Polynomial.leadingCoeff_mul, Polynomial.leadingCoeff_C, mul_comm, leadingCoeff_toPoly,
-       toPoly_const]
+       toPoly_const, Polynomial.leadingCoeff_mul, Polynomial.leadingCoeff_C,
+       leadingCoeff_toPoly]
 
 theorem div_wf {p q : Poly (n+1)} (lp : Poly n) (h : q.degree ≤ p.degree)
     (hq0 : q.degree ≠ 0) :
@@ -1017,13 +1027,17 @@ def pseudoModDiv : ∀ {n : ℕ} (p q : Poly (n+1)), (ℕ × Poly (n+1) ×
   let lp := p.leadingCoeff
   let lq := q.leadingCoeff
   if h : degree q ≤ degree p then
-  if hp0 : p = 0 then (0, 0, ⟨0, by simp⟩)
+  if hp0 : p = 0 then (0, 0, ⟨0, by
+    simp [WithBot.bot_lt_iff_ne_bot]
+    rw [← Ne, ← degree_nonneg_iff_ne_zero]
+    admit⟩)
+  else if hq0 : q = 0 then ⟨1, 0, ⟨0, by simp_all⟩⟩
   else
-      let z := (const lp * X 0 ^ (dp - dq) * q)
-      have wf := modDiv_wf lp lq h _ _
-      let (n, h, r) := pseudoModDiv (const lq * p - z) q
-      (n+1, h + const (lq ^ n * lp) * X 0 ^(dp - dq), r)
-  else (0, 0, ⟨p, ⟨fun _ => lt_of_not_ge h, fun hq0 => by simp [dp, dq, hq0] at h⟩⟩)
+    let z := (const lp * X 0 ^ (dp - dq) * q)
+    have wf := modDiv_wf lp lq h hp0 hq0
+    let (n, h, r) := pseudoModDiv (const lq * p - z) q
+    (n+1, h + const (lq ^ n * lp) * X 0 ^(dp - dq), r)
+  else (0, 0, ⟨p, fun _ => lt_of_not_le h⟩)
   termination_by n p => (n+1, 1, degree p)
 
 
