@@ -70,24 +70,12 @@ def interpret : {n : ℕ} → Formula n → (vars : Fin n → K) → Prop
 end Formula
 
 /-- Polynomials in n variables as a polynomial in var 0 over the ring of polynomials in the remaining variables -/
-inductive PolyAux : (n : ℕ) → Type
-  | ofInt' : ℤ  → PolyAux 0
-  | const : PolyAux n → PolyAux (n+1)
+inductive Poly : (n : ℕ) → Type
+  | ofInt' : ℤ  → Poly 0
+  | const : Poly n → Poly (n+1)
   -- Never use when second part is zero
-  | constAddXMul : PolyAux n → PolyAux (n + 1) → PolyAux (n + 1)
+  | constAddXMul : Poly n → Poly (n + 1) → Poly (n + 1)
   deriving DecidableEq
-
-def PolyAux.zero : ∀ {n : ℕ}, PolyAux n
-  | 0 => ofInt' 0
-  | _+1 => const PolyAux.zero
-
-inductive PolyAux.Good : {n : ℕ} → PolyAux n → Prop
-  | ofInt' : ∀ (x : ℤ), Good (ofInt' x)
-  | const : ∀ p : PolyAux n, Good p → Good p.const
-  | constAddXMul : ∀ (p : PolyAux n)
-      (q : PolyAux (n+1)), Good p → Good q → q ≠ PolyAux.zero → Good (constAddXMul p q)
-
-def Poly (n : ℕ) : Type := { p : PolyAux n // p.Good }
 
 namespace Poly
 
