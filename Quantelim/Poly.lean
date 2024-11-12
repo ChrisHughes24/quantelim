@@ -402,6 +402,67 @@ theorem good_mul : ∀ {n : ℕ} {p q : PolyAux n}, Good p → Good q → Good (
       assumption
   termination_by n p q => (n, sizeOf p + sizeOf q)
 
+theorem eq_of_sub_eq_zero : ∀ {n : ℕ} {p q : PolyAux n}, Good p → Good q →
+    p.add q.neg = 0 → p = q
+  | _, ofInt' x, ofInt' y, _, _ => by simp [add, neg, add_neg_eq_zero]
+  | _, const p, const q, Good.const hp, Good.const hq => by
+     simp only [add, neg, zero_def, ofInt]
+     intro h
+     injection h with _ h
+     rw [eq_of_sub_eq_zero hp hq h]
+  | _, const p, constAddXMul q r, Good.const hp, Good.constAddXMul hq hr hr0 => by
+     simp [add, neg]
+  | _, constAddXMul p q, const r, Good.constAddXMul hp hq hq0, Good.const hr => by
+    simp [add, neg]
+  | _, constAddXMul p q, constAddXMul r s, Good.constAddXMul hp hq hq0,
+      Good.constAddXMul hr hs hs0 => by
+    intro h
+    simp only [add, constAddXMul'] at *
+    split_ifs at h with h1
+    · rw [eq_of_sub_eq_zero hq hs h1]
+      rw [zero_def, ofInt] at h
+      injection h with _ h
+      rw [eq_of_sub_eq_zero hp hr h]
+    · cases h
+
+theorem eval_eq_zero : ∀ {n : ℕ} {p : PolyAux n}, Good p →
+    p.eval (fun i : Fin n => (MvPolynomial.X i : MvPolynomial (Fin n) ℤ)) = 0 →
+    p = 0
+  | _, ofInt' x, h => by simp
+  | n+1, const p, Good.const hp => by
+    intro h
+    apply_fun MvPolynomial.eval₂Hom MvPolynomial.C (fun i : Fin (n+1) => Fin.cases
+      (0 : MvPolynomial (Fin n) ℤ) (MvPolynomial.X) i) at h
+    simp only [apply_eval] at h
+    simp only [eval, MvPolynomial.eval₂Hom_X', Fin.cases_succ, map_zero] at h
+    rw [eval_eq_zero hp h]
+    rfl
+  | n+1,  constAddXMul p q, Good.constAddXMul hp hq h0 => by
+    intro h
+    simp at h
+    apply_fun MvPolynomial.eval₂Hom (Int.castRingHom _ : ℤ →+* (Polynomial (MvPolynomial (Fin n) ℤ)))
+      (fun i : Fin (n+1) => Fin.cases Polynomial.X (fun i => Polynomial.C (MvPolynomial.X i)) i) at h
+    simp only [apply_eval, MvPolynomial.eval₂Hom_X', Fin.cases_succ, map_add, map_mul,
+      Fin.cases_zero] at h
+    simp only [← apply_eval] at h
+    apply_fun Polynomial.divX at h
+    simp only [Polynomial.divX_C, Polynomial.divX_add, zero_add] at h
+    simp only [MvPolynomial.coe_eval₂Hom, MvPolynomial.eval₂_zero, Polynomial.divX_zero] at h
+    rw [Polynomial.divX_eq_zero_iff] at h
+    simp only [Polynomial.mul_coeff_zero, Polynomial.coeff_X_zero, zero_mul, map_zero, mul_eq_zero,
+      Polynomial.X_ne_zero, false_or] at h
+    apply_fun Polynomial.eval₂RingHom (MvPolynomial.rename (Fin.succ : Fin n → Fin (n+1))).toRingHom
+      (MvPolynomial.X 0) at h
+    simp only [apply_eval] at h
+    simp at h
+    exfalso
+    apply h0
+    apply eval_eq_zero hq
+    convert h using 2
+    funext i
+    induction i using Fin.cases <;> simp
+
+
 end PolyAux
 
 def Poly (n : ℕ) : Type := { p : PolyAux n // p.Good }
