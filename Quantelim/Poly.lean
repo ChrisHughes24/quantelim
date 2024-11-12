@@ -222,10 +222,44 @@ def leadingMon : ∀ {n : ℕ}, PolyAux n → Vector ℕ n
     | ⟨n :: l, h⟩ => ⟨(n+1) :: l, h⟩
 
 @[simp]
-def degree : ∀ {n : ℕ}, PolyAux n → ℕ
+def degree : ∀ {n : ℕ}, PolyAux n → WithBot ℕ
+  | _, ofInt' x => if x = 0 then ⊥ else 0
+  | _, const p => if p = 0 then ⊥ else 0
+  | _, constAddXMul _ q => degree q + 1
+
+theorem degree_nonneg_iff_ne_zero : ∀ {n : ℕ} (p : PolyAux n) (hp : p.Good), 0 ≤ p.degree ↔ p ≠ 0
+  | _, ofInt' x, _ => by
+    simp [degree]
+    split_ifs
+    · simp_all
+      rfl
+    · simp
+      intro h
+      injection h; simp_all
+  | _, const p, _ => by
+    simp [degree]
+    split_ifs
+    · simp_all
+      rfl
+    · simp
+      intro h
+      injection h
+      simp_all
+      contradiction
+  | _, constAddXMul _ q, h => by
+    simp [zero_def, ofInt]
+    refine add_nonneg ?_ zero_le_one
+    rw [degree_nonneg_iff_ne_zero q]
+    cases h
+    assumption
+    cases h
+    assumption
+
+@[simp]
+def natDegree : ∀ {n : ℕ}, PolyAux n → ℕ
   | _, ofInt' _ => 0
   | _, const _ => 0
-  | _, constAddXMul _ q => degree q + 1
+  | _, constAddXMul _ q => natDegree q + 1
 
 def deriv : ∀ {n : ℕ}, PolyAux (n + 1) → PolyAux (n + 1)
   | _, constAddXMul _ q => q + constAddXMul' 0 (deriv q)
@@ -258,29 +292,33 @@ theorem eval_pow {n : ℕ} (p : PolyAux n) (m : ℕ) (vars : Fin n → K) :
 
 @[simp]
 theorem eval_eraseLead : ∀ {n : ℕ} (p : PolyAux (n+1)) (vars : Fin (n+1) → K),
-     p.eraseLead.eval vars = p.eval vars - p.leadingCoeff.eval (fun i => vars i.succ) * vars 0 ^ p.degree
-  | _, const _, _ => by simp [degree, eraseLead, leadingCoeff]
+     p.eraseLead.eval vars = p.eval vars - p.leadingCoeff.eval (fun i => vars i.succ) * vars 0 ^ p.natDegree
+  | _, const _, _ => by simp [natDegree, eraseLead, leadingCoeff]
   | _, constAddXMul p q, _ => by
-    simp only [eraseLead, leadingCoeff, eval, eval_constAddXMul', degree]
+    simp only [eraseLead, leadingCoeff, eval, eval_constAddXMul', natDegree]
     rw [eval_eraseLead]
     ring
 
-theorem degree_pos_of_eraseLead_ne_zero : ∀ {n : ℕ} {p : PolyAux n}, p.eraseLead ≠ 0 → 0 < p.degree
+theorem natDegree_pos_of_eraseLead_ne_zero : ∀ {n : ℕ} {p : PolyAux n}, p.eraseLead ≠ 0 → 0 < p.natDegree
   | _, ofInt' _ => by simp [eraseLead]
   | _, const _ => by simp [eraseLead]
-  | _, constAddXMul _ _ => by simp [degree, eraseLead]
+  | _, constAddXMul _ _ => by simp [natDegree, eraseLead]
 
-theorem degree_eraseLead : ∀ {n : ℕ} (p : PolyAux n), degree (eraseLead p) ≤ degree p - 1
-  | _, ofInt' _ => by simp [degree]
-  | _, const _ => by simp [degree]
+theorem natDegree_eraseLead : ∀ {n : ℕ} (p : PolyAux n), natDegree (eraseLead p) ≤ natDegree p - 1
+  | _, ofInt' _ => by simp [natDegree]
+  | _, const _ => by simp [natDegree]
   | _, constAddXMul p q => by
-    rw [degree, eraseLead, constAddXMul']
+    rw [natDegree, eraseLead, constAddXMul']
     split_ifs with hq0
-    · simp [degree]
-    · simp only [degree, add_tsub_cancel_right]
-      refine le_trans (Nat.succ_le_succ (degree_eraseLead q)) ?_
-      rw [← Nat.succ_sub (Nat.succ_le.2 (degree_pos_of_eraseLead_ne_zero hq0))]
+    · simp [natDegree]
+    · simp only [natDegree, add_tsub_cancel_right]
+      refine le_trans (Nat.succ_le_succ (natDegree_eraseLead q)) ?_
+      rw [← Nat.succ_sub (Nat.succ_le.2 (natDegree_pos_of_eraseLead_ne_zero hq0))]
       simp
+
+@[simp]
+theorem neg_eq_zero {n : ℕ} {p : PolyAux n} : p.neg = 0 ↔ p = 0 := by
+  induction p <;> simp_all [neg, zero_def, ofInt]
 
 @[simp]
 theorem degree_neg : ∀ {n : ℕ} (p : PolyAux n), (-p).degree = p.degree
@@ -295,22 +333,6 @@ theorem leadingCoeff_neg : ∀ {n : ℕ} (p : PolyAux (n+1)), (-p).leadingCoeff 
   | _, const _ => by rw [leadingCoeff, neg_const, leadingCoeff]
   | _, constAddXMul p q => by
     rw [leadingCoeff, ← leadingCoeff_neg, constAddXMul_neg, leadingCoeff]
-
-theorem degree_add_le : ∀ {n : ℕ} (p q : PolyAux (n+1)), degree (p + q) ≤ max (degree p) (degree q)
-  | _, const p, const q => by simp [HAdd.hAdd, degree]
-  | _, constAddXMul p q, const r => by simp [HAdd.hAdd, degree]
-  | _, const p, constAddXMul r s => by simp [HAdd.hAdd, degree]
-  | _, constAddXMul p q, constAddXMul r s => by
-    simp only [HAdd.hAdd, degree]
-    simp only [Add.add]
-    rw [add, constAddXMul']
-    split_ifs
-    · simp [degree]
-    · rw [degree]
-      simpa using degree_add_le q s
-
-theorem degree_sub_le {n : ℕ} (p q : PolyAux (n+1)) : degree (p - q) ≤ max (degree p) (degree q) :=
-  le_trans (degree_add_le _ _) (by simp)
 
 def mulConstMulXPow : ∀ {n : ℕ} (p : PolyAux n) (m : ℕ) (q : PolyAux (n+1)), PolyAux (n+1)
   | _, p, 0, const q => const (p * q)
@@ -330,13 +352,13 @@ theorem leadingCoeff_mulConstMulXPow : ∀ {n : ℕ} (p : PolyAux n) (m : ℕ) (
     rw [leadingCoeff_mulConstMulXPow]
 
 @[simp]
-theorem degree_mulConstMulXPow : ∀ {n : ℕ} (p : PolyAux n) (m : ℕ) (q : PolyAux (n+1)),
-     degree (mulConstMulXPow p m q) = degree q + m
-  | _, p, 0, const q => by simp [degree, mulConstMulXPow]
+theorem natDegree_mulConstMulXPow : ∀ {n : ℕ} (p : PolyAux n) (m : ℕ) (q : PolyAux (n+1)),
+     natDegree (mulConstMulXPow p m q) = natDegree q + m
+  | _, p, 0, const q => by simp [natDegree, mulConstMulXPow]
   | _, p, 0, constAddXMul q r => by
-    rw [degree, mulConstMulXPow, degree, degree_mulConstMulXPow]
+    rw [natDegree, mulConstMulXPow, natDegree, natDegree_mulConstMulXPow]
   | _, p, m+1, q => by
-    rw [mulConstMulXPow, degree, degree_mulConstMulXPow, add_assoc]
+    rw [mulConstMulXPow, natDegree, natDegree_mulConstMulXPow, add_assoc]
 
 theorem eval_mulConstMulXPow : ∀ {n : ℕ} (p : PolyAux n) (m : ℕ) (q : PolyAux (n+1)) (vars : Fin (n+1) → K),
     eval (mulConstMulXPow p m q) vars = eval p (fun i => vars i.succ) * vars 0 ^ m * eval q vars
@@ -392,9 +414,7 @@ theorem constAddXMul_ne_zero {p : PolyAux n} {q : PolyAux (n+1)} :
   simp [zero_def]
   cases n <;> simp [ofInt]
 
-@[simp]
-theorem neg_eq_zero {n : ℕ} {p : PolyAux n} : p.neg = 0 ↔ p = 0 := by
-  induction p <;> simp_all [neg]
+
 
 theorem good_neg {n : ℕ} {p : PolyAux n} (h : Good p) : Good p.neg := by
   induction p <;> cases h <;> constructor <;> simp_all
@@ -601,6 +621,14 @@ theorem val_zero : ((0 : Poly n).val : PolyAux n) = 0 := rfl
 @[simp]
 theorem val_one : ((1 : Poly n).val : PolyAux n) = 1 := rfl
 
+@[simp]
+theorem val_eq_zero {x : Poly n} : x.1 = 0 ↔ x = 0 := by
+  rw [← Subtype.val_injective.eq_iff]; rfl
+
+@[simp]
+theorem val_ne_zero (x : Poly n) : x.1 ≠ 0 ↔ x ≠ 0 := by
+  rw [Ne, val_eq_zero]
+
 private noncomputable def ringEquivMvPolyAux : Poly n ≃+* MvPolynomial (Fin n) ℤ where
   toEquiv := Equiv.ofBijective (fun p => p.1.eval (fun i : Fin n => (MvPolynomial.X i : MvPolynomial (Fin n) ℤ))) <| by
     refine ⟨fun p q h => ?_, fun f => ?_⟩
@@ -755,20 +783,49 @@ def constAddXMul {n : ℕ} (p : Poly n) (q : Poly (n+1)) (hq0 : q ≠ 0) : Poly 
     simp_all
     exact hq0 rfl)⟩
 
+@[simp]
+theorem eval_constAddXMul (vars : Fin (n+1) → R) (p : Poly n) (q : Poly (n+1)) (hq0 : q ≠ 0) :
+    eval vars (constAddXMul p q hq0) = eval vars p.const + vars 0 * eval vars q := rfl
+
+theorem toPoly_const (p : Poly n) : toPoly (const p) = Polynomial.C (toMvPoly p) :=
+  show (toPoly.toRingHom.comp const) p = Polynomial.C.comp toMvPoly.toRingHom p from
+    RingHom.congr_fun (hom_ext (by simp [toPoly, toMvPoly])) _
+
 @[recursor 2]
-def recOn : ∀ {n : ℕ} {C : ∀ {n : ℕ}, Poly n → Sort*} (p : Poly n) (_ofInt : ∀ x : ℤ, C (x : Poly 0))
+def recOnAux : ∀ {n : ℕ} {C : ∀ {n : ℕ}, Poly n → Sort*} (p : PolyAux n) (hp : p.Good)
+    (_ofInt : ∀ x : ℤ, C (x : Poly 0))
     (_const : ∀ {n} (p : Poly n), C p → C (const p))
-    (_constAddXMul : ∀ (n) (p : Poly n) (q : Poly (n+1)) (hq : q ≠ 0), C (constAddXMul p q hq)), C p
-  | _, _, ⟨PolyAux.ofInt' x, _⟩, ofInt, _, _ => ofInt x
-  | _, _, ⟨PolyAux.const p, hp⟩, oI, const, cX =>
-    const ⟨p, by cases hp; assumption⟩ (recOn _ oI const cX)
-  | _, _, ⟨PolyAux.constAddXMul p q, h⟩, _, _, constAddXMul =>
+    (_constAddXMul : ∀ (n) (p : Poly n) (q : Poly (n+1)) (hq : q ≠ 0),
+      C p → C q → C (constAddXMul p q hq)), C ⟨p, hp⟩
+  | _, _, PolyAux.ofInt' x, _, ofInt, _, _ => ofInt x
+  | _, _, PolyAux.const p, hp, oI, const, cX =>
+    const ⟨p, by cases hp; assumption⟩ (recOnAux _ _ oI const cX)
+  | _, _, PolyAux.constAddXMul p q, h, oI, oC, constAddXMul =>
     constAddXMul _ ⟨p, by cases h; assumption⟩ ⟨q, by cases h; assumption⟩ (by
     intro hq
     cases h with
     | constAddXMul _ _ hq0 =>
       apply_fun Subtype.val at hq
-      simp_all)
+      simp_all) (recOnAux p _ oI oC constAddXMul) (recOnAux q _ oI oC constAddXMul)
+
+@[recursor 2]
+def recOn {n : ℕ} {C : ∀ {n : ℕ}, Poly n → Sort*} (p : Poly n) (_ofInt : ∀ x : ℤ, C (x : Poly 0))
+    (_const : ∀ {n} (p : Poly n), C p → C (const p))
+    (_constAddXMul : ∀ (n) (p : Poly n) (q : Poly (n+1)) (hq : q ≠ 0),
+      C p → C q → C (constAddXMul p q hq)) : C p :=
+  recOnAux p.1 p.2 _ofInt _const _constAddXMul
+
+@[recursor 1]
+def recOnSucc  {n : ℕ} {C : ∀ {n : ℕ}, Poly (n+1) → Sort*} (p : Poly (n+1))
+    (const : ∀ {n} (p : Poly n), C (const p))
+    (constAddXMul : ∀ (n) (p : Poly n) (q : Poly (n+1)) (hq : q ≠ 0),
+      C q → C (constAddXMul p q hq)) : C p :=
+  @recOn (n + 1) (fun {k} p => ∀ (h : n + 1 = k), C (h ▸ p)) p (fun _ h => False.elim (by simp at h))
+    (fun _ _ h => (Nat.succ_injective h).symm ▸ const _)
+    (fun _ _ _ _ _ ih h => by
+      cases Nat.succ_injective h
+      exact constAddXMul _ _ _ _ (ih rfl))
+    rfl
 
 def leadingCoeff {n : ℕ} (p : Poly (n+1)) : Poly n :=
   ⟨PolyAux.leadingCoeff p.1, PolyAux.good_leadingCoeff p.2⟩
@@ -776,8 +833,35 @@ def leadingCoeff {n : ℕ} (p : Poly (n+1)) : Poly n :=
 def eraseLead {n : ℕ} (p : Poly n) : Poly n :=
   ⟨PolyAux.eraseLead p.1, PolyAux.good_eraseLead p.2⟩
 
-@[simp]
-def degree {n : ℕ} (p : Poly n) : ℕ := p.1.degree
+def degree {n : ℕ} (p : Poly (n+1)) : WithBot ℕ := p.1.degree
+
+def natDegree {n : ℕ} (p : Poly n) : ℕ := p.1.natDegree
+
+theorem degree_nonneg_iff_ne_zero {n : ℕ} {p : Poly (n+1)} : 0 ≤ p.degree ↔ p ≠ 0 := by
+  erw [(PolyAux.degree_nonneg_iff_ne_zero p.1 p.2), val_ne_zero]
+
+theorem degree_toPoly {n : ℕ} (p : Poly (n+1)) : (toPoly p).degree = p.degree :=
+  @recOnSucc n (fun p => (toPoly p).degree = p.degree) p
+    (by
+      intro n p
+      by_cases hp : p = 0
+      · subst hp; simp [degree]
+      · have hp01 : toMvPoly p ≠ 0 := by
+          rwa [Ne, RingEquiv.map_eq_zero_iff toMvPoly]
+        rw [toPoly_const, Polynomial.degree_C hp01]
+        show (0 : WithBot ℕ) = if _ then _ else _
+        rw [if_neg]
+        rwa [val_eq_zero])
+    (by
+      intro m p q hq ih
+      simp [toPoly, degree] at *
+      rw [← ih, add_comm, ← apply_eval]
+      rw [Polynomial.degree_add_C, Polynomial.degree_mul, Polynomial.degree_X,
+        add_comm]
+      rw [Polynomial.degree_mul, Polynomial.degree_X, ih]
+      refine add_pos_of_pos_of_nonneg zero_lt_one ?_
+      rw [PolyAux.degree_nonneg_iff_ne_zero _ q.2]
+      rwa [val_ne_zero])
 
 def deriv {n : ℕ} (p : Poly (n+1)) : Poly (n+1) :=
   ⟨PolyAux.deriv p.1, PolyAux.good_deriv p.2⟩
