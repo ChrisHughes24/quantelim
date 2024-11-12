@@ -19,7 +19,7 @@ namespace PolyAux
 variable {n : ℕ} {K : Type*} [CommRing K]
 
 @[simp]
-noncomputable def eval : {n : ℕ} → PolyAux n → (vars : Fin n → K) → K
+def eval : {n : ℕ} → PolyAux n → (vars : Fin n → K) → K
   | _, ofInt' q, _ => q
   | _, const p, vars => p.eval (fun i => vars i.succ)
   | _, constAddXMul p q, vars =>
@@ -47,11 +47,15 @@ instance {n : ℕ} : Zero (PolyAux n) := ⟨(0 : ℤ)⟩
 
 theorem zero_def : (0 : PolyAux n) = ofInt 0 := rfl
 
-
 @[simp]
 theorem eval_zero {n : ℕ} (vars : Fin n → K) :
     eval (0 : PolyAux n) vars = 0 := by
   erw [eval_intCast 0]; simp
+
+inductive Good : ∀ {n : ℕ}, PolyAux n → Prop
+  | ofInt : ∀ (x : ℤ), Good (ofInt' x)
+  | const : ∀ {p}, Good p → Good (const p)
+  | constAddXMul : ∀ {p q}, Good p → Good q → q ≠ 0 → Good (constAddXMul p q)
 
 instance {n : ℕ} : One (PolyAux n) := ⟨(1 : ℤ )⟩
 
@@ -173,14 +177,39 @@ theorem eval_sub {n : ℕ} (p q : PolyAux n) (vars : Fin n → K) :
     eval (p - q) vars = p.eval vars - q.eval vars :=
   (eval_add p (-q) vars).trans <| by simp [sub_eq_add_neg]
 
+theorem good_ofInt {z : ℤ} : Good (ofInt z : PolyAux n) := by
+  induction n <;> simp [ofInt] <;> constructor; assumption
+
 def leadingCoeff : ∀ {n : ℕ}, PolyAux (n+1) → PolyAux n
   | _, const p => p
   | _, constAddXMul _ q => leadingCoeff q
+
+theorem good_leadingCoeff : ∀ {n : ℕ} {p : PolyAux (n+1)} (_h : Good p), Good (leadingCoeff p)
+  | _, const _, h => by cases h; simp [leadingCoeff]; assumption
+  | _, constAddXMul _ q, h => by
+    cases h
+    rw [leadingCoeff]
+    exact good_leadingCoeff (by assumption)
+
+theorem good_constAddXMul' {n : ℕ} {p : PolyAux n} (q : (PolyAux (n+1)))
+    (hp : Good p) (hq : Good q) : Good (constAddXMul' p q) := by
+  rw [constAddXMul']
+  split_ifs with hq0
+  · constructor; assumption
+  · constructor <;> assumption
 
 def eraseLead : ∀ {n : ℕ}, PolyAux n → PolyAux n
   | _, ofInt' _ => 0
   | _, const _ => 0
   | _, constAddXMul p q => constAddXMul' p (eraseLead q)
+
+theorem good_eraseLead : ∀ {n : ℕ} {p : PolyAux n} (_h : Good p), Good (eraseLead p)
+  | _, ofInt' _, h => by constructor
+  | _, const _, h => good_ofInt
+  | _, constAddXMul p q, h => by
+    cases h
+    simp [eraseLead]
+    exact good_constAddXMul' _ (by assumption) (good_eraseLead (by assumption))
 
 open Mathlib Mathlib.Vector
 
@@ -283,15 +312,18 @@ theorem degree_sub_le {n : ℕ} (p q : PolyAux (n+1)) : degree (p - q) ≤ max (
 
 def mulConstMulXPow : ∀ {n : ℕ} (p : PolyAux n) (m : ℕ) (q : PolyAux (n+1)), PolyAux (n+1)
   | _, p, 0, const q => const (p * q)
-  | _, p, 0, constAddXMul q r => constAddXMul (p * q) (mulConstMulXPow p 0 r)
-  | _, p, m+1, q => constAddXMul 0 (mulConstMulXPow p m q)
+  | _, p, 0, constAddXMul q r => constAddXMul' (p * q) (mulConstMulXPow p 0 r)
+  | _, p, m+1, q => constAddXMul' 0 (mulConstMulXPow p m q)
+
+theorem mulConstMulXPow
 
 @[simp]
 theorem leadingCoeff_mulConstMulXPow : ∀ {n : ℕ} (p : PolyAux n) (m : ℕ) (q : PolyAux (n+1)),
     leadingCoeff (mulConstMulXPow p m q) = p * leadingCoeff q
   | _, p, 0, const q => by simp [mulConstMulXPow, leadingCoeff]
   | _, p, 0, constAddXMul q r => by
-    simp only [mulConstMulXPow, leadingCoeff]
+    simp only [mulConstMulXPow, leadingCoeff, constAddXMul']
+
     rw [leadingCoeff_mulConstMulXPow]
   | _, p, m+1, q => by
     simp only [mulConstMulXPow, leadingCoeff]
@@ -317,11 +349,6 @@ theorem eval_mulConstMulXPow : ∀ {n : ℕ} (p : PolyAux n) (m : ℕ) (q : Poly
     simp only [mulConstMulXPow, eval, eval_mul, eval_zero]
     rw [eval_mulConstMulXPow, pow_succ]
     ring
-
-inductive Good : ∀ {n : ℕ}, PolyAux n → Prop
-  | ofInt : ∀ (x : ℤ), Good (ofInt' x)
-  | const : ∀ {p}, Good p → Good (const p)
-  | constAddXMul : ∀ {p q}, Good p → Good q → q ≠ 0 → Good (constAddXMul p q)
 
 open Good
 
@@ -372,8 +399,7 @@ theorem neg_eq_zero {n : ℕ} {p : PolyAux n} : p.neg = 0 ↔ p = 0 := by
 theorem good_neg {n : ℕ} {p : PolyAux n} (h : Good p) : Good p.neg := by
   induction p <;> cases h <;> constructor <;> simp_all
 
-theorem good_ofInt {z : ℤ} : Good (ofInt z : PolyAux n) := by
-  induction n <;> simp [ofInt] <;> constructor; assumption
+
 
 @[simp]
 theorem ofInt_add {x y : ℤ} : (ofInt (x + y) : PolyAux n) = ofInt x + ofInt y := by
@@ -437,6 +463,30 @@ theorem good_X : ∀ {n : ℕ} (i : Fin n), Good (X i : PolyAux n)
     simp only [X]
     constructor
     apply good_X
+
+theorem good_deriv : ∀ {n : ℕ} {p : PolyAux (n+1)} (_h : Good p), Good (deriv p)
+  | _, constAddXMul _ q, h => by
+    cases h
+    simp [deriv]
+    exact good_add (by assumption) (good_constAddXMul' _ (good_ofInt) (good_deriv (by assumption)))
+  | _, const _, h => by
+    cases h
+    simp [deriv]
+    exact good_ofInt
+
+theorem good_mulConstMulXPow  : ∀ {n : ℕ} {p : PolyAux n} {m : ℕ} {q : PolyAux (n+1)},
+    Good p → Good q → Good (mulConstMulXPow p m q)
+  | _, p, 0, const q, hp, hq => by
+    simp [mulConstMulXPow]
+    exact Good.const <| good_mul hp (by cases hq; assumption)
+  | _, p, 0, constAddXMul q r, hp, hq => by
+    simp [mulConstMulXPow]
+    exact Good.constAddXMul (good_mul hp (by cases hq; assumption))
+      (good_mulConstMulXPow hp (by cases hq; assumption))
+      sorry
+  | _, p, m+1, q, hp, hq => by
+    simp [mulConstMulXPow]
+    exact Good.constAddXMul good_ofInt (good_mulConstMulXPow hp hq) _
 
 theorem eq_of_sub_eq_zero : ∀ {n : ℕ} {p q : PolyAux n}, Good p → Good q →
     p.add q.neg = 0 → p = q
@@ -619,6 +669,84 @@ instance : CommRing (Poly n) where
     simp
 
 end CommRing
+
+section defs
+
+variable {n : ℕ} {R : Type*} [CommRing R]
+
+def eval (vars : Fin n → R) : Poly n →+* R where
+  toFun := fun p => p.1.eval vars
+  map_one' := by simp
+  map_mul' := by simp
+  map_zero' := by simp
+  map_add' := by simp
+
+def const : Poly n →+* Poly (n+1) where
+  toFun := fun p => ⟨PolyAux.const p.1, PolyAux.Good.const p.2⟩
+  map_one' := rfl
+  map_mul' x y := by
+    apply Subtype.ext
+    cases x; cases y
+    simp [val_mul, val_add, val_one, val_zero]
+    simp [HMul.hMul]
+    simp [Mul.mul, PolyAux.mul]
+  map_add' x y := by
+    apply Subtype.ext
+    cases x; cases y
+    simp [val_mul, val_add, val_one, val_zero]
+    simp [HAdd.hAdd]
+    simp [Add.add, PolyAux.add]
+  map_zero' := rfl
+
+@[simp]
+theorem eval_const (vars : Fin (n+1) → R) (p : Poly n) :
+    eval vars p.const = eval (fun i => vars i.succ) p := rfl
+
+def constAddXMul {n : ℕ} (p : Poly n) (q : Poly (n+1)) (hq0 : q ≠ 0) : Poly (n+1) :=
+  ⟨PolyAux.constAddXMul p.1 q.1, PolyAux.Good.constAddXMul p.2 q.2 (by
+    intro h
+    cases q
+    simp_all
+    exact hq0 rfl)⟩
+
+@[recursor 2]
+def recOn : ∀ {n : ℕ} {C : ∀ {n : ℕ}, Poly n → Sort*} (p : Poly n) (_ofInt : ∀ x : ℤ, C (x : Poly 0))
+    (_const : ∀ {n} (p : Poly n), C p → C (const p))
+    (_constAddXMul : ∀ (n) (p : Poly n) (q : Poly (n+1)) (hq : q ≠ 0), C (constAddXMul p q hq)), C p
+  | _, _, ⟨PolyAux.ofInt' x, _⟩, ofInt, _, _ => ofInt x
+  | _, _, ⟨PolyAux.const p, hp⟩, oI, const, cX =>
+    const ⟨p, by cases hp; assumption⟩ (recOn _ oI const cX)
+  | _, _, ⟨PolyAux.constAddXMul p q, h⟩, _, _, constAddXMul =>
+    constAddXMul _ ⟨p, by cases h; assumption⟩ ⟨q, by cases h; assumption⟩ (by
+    intro hq
+    cases h with
+    | constAddXMul _ _ hq0 =>
+      apply_fun Subtype.val at hq
+      simp_all)
+
+def leadingCoeff {n : ℕ} (p : Poly (n+1)) : Poly n :=
+  ⟨PolyAux.leadingCoeff p.1, PolyAux.good_leadingCoeff p.2⟩
+
+def eraseLead {n : ℕ} (p : Poly n) : Poly n :=
+  ⟨PolyAux.eraseLead p.1, PolyAux.good_eraseLead p.2⟩
+
+@[simp]
+def degree {n : ℕ} (p : Poly n) : ℕ := p.1.degree
+
+def deriv {n : ℕ} (p : Poly (n+1)) : Poly (n+1) :=
+  ⟨PolyAux.deriv p.1, PolyAux.good_deriv p.2⟩
+
+@[simp]
+theorem eval_X : ∀ {n : ℕ}  (i : Fin n) (vars : Fin n → K),
+    eval (X i) vars = vars i
+  | _+1, ⟨0, _⟩ => by simp
+  | _+1, ⟨i+1, h⟩ => by simp [eval_X]
+
+instance {n : ℕ} : NatPow (Poly n) := ⟨fun p n => (.*p)^[n] 1⟩
+
+end defs
+
+variable {n : ℕ}
 
 theorem modDiv_wf {p q : Poly (n+1)} (lp lq : Poly n) (h : q.degree ≤ p.degree)
     (hq0 : q.degree ≠ 0) :
