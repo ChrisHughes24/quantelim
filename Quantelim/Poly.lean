@@ -927,21 +927,38 @@ theorem leadingCoeff_toPoly {n : ℕ} (p : Poly (n+1)) : toMvPoly (leadingCoeff 
       show toPoly _ ≠ _
       rwa [Ne, toPoly.map_eq_zero_iff])
 
-instance {n : ℕ} : NatPow (Poly n) := ⟨fun p n => (.*p)^[n] 1⟩
+theorem degree_sub_lt {n : ℕ} {p q : Poly (n+1)} (h : p.degree = q.degree) (hq0 : p ≠ 0)
+    (h : p.leadingCoeff = q.leadingCoeff) : (p - q).degree < p.degree := by
+  rw [← degree_toPoly, ← degree_toPoly, map_sub]
+  apply Polynomial.degree_sub_lt
+  · rwa [degree_toPoly, degree_toPoly]
+  · rwa [Ne, toPoly.map_eq_zero_iff]
+
+theorem natDegree_toPoly {n : ℕ} (p : Poly (n+1)) : (toPoly p).natDegree = p.natDegree := by
+  rw [natDegree, Polynomial.natDegree, degree_toPoly, PolyAux.natDegree]; rfl
+
+theorem degree_eq_natDegree {n : ℕ} {p : Poly (n+1)} (hp0 : p ≠ 0) : p.degree = p.natDegree := by
+  rw [← degree_toPoly, ← natDegree_toPoly]
+  apply Polynomial.degree_eq_natDegree
+  rwa [Ne, toPoly.map_eq_zero_iff]
 
 end defs
-#print Polynomial.divModByMonicAux
+#print Polynomial.Monic.degree_mul_comm
 variable {n : ℕ}
 
-theorem modDiv_wf {p q : Poly (n+1)} (lp lq : Poly n) (h : q.degree ≤ p.degree) (hq0 : q ≠ 0) :
+theorem modDiv_wf {p q : Poly (n+1)} (lp lq : Poly n) (h : q.degree ≤ p.degree) (hp0 : p ≠ 0) (hq0 : q ≠ 0) :
     (const q.leadingCoeff * p - const p.leadingCoeff * X 0 ^ (p.natDegree - q.natDegree)).degree < p.degree := by
-  refine lt_of_le_of_lt (degree_sub_le _ _) ?_
-  rw [max_lt_iff, degree_mul, degree_const_of_ne_zero]
-  refine ⟨lt_of_le_of_lt (degree_eraseLead _) ?_, lt_of_le_of_lt (degree_eraseLead _) ?_⟩
-  . rw [degree_mulConstMulXPow, add_zero]
-    exact lt_of_lt_of_le (Nat.sub_lt_self zero_lt_one (le_trans (Nat.one_le_iff_ne_zero.2 hq0) h)) le_rfl
-  · erw [degree_mulConstMulXPow, Nat.add_sub_cancel' h]
-    exact Nat.sub_lt_self zero_lt_one (le_trans (Nat.one_le_iff_ne_zero.2 hq0) h)
+  have hp : leadingCoeff p ≠ 0 := by
+    rwa [Ne, ← (@toMvPoly n).injective.eq_iff, leadingCoeff_toPoly, map_zero,
+      Polynomial.leadingCoeff_eq_zero, toPoly.map_eq_zero_iff]
+  have hlt : natDegree q ≤ natDegree p :=
+    (Nat.cast_le (α := WithBot ℕ)).1
+      (by rw [← degree_eq_natDegree hp0, ← degree_eq_natDegree hq0]; exact h)
+  refine lt_of_lt_of_le (degree_sub_lt ?_ ?_ ?_) ?_
+  · rw [mul_comm, degree_mul,  degree_C_mul_X_pow _ hp, degree_eq_natDegree h.2,
+        degree_eq_natDegree hq0, ← Nat.cast_add, tsub_add_cancel_of_le hlt]
+  · sorry
+  · rw [leadingCoeff_monic_mul hq, leadingCoeff_mul_X_pow, leadingCoeff_C]
 
 theorem div_wf {p q : Poly (n+1)} (lp : Poly n) (h : q.degree ≤ p.degree)
     (hq0 : q.degree ≠ 0) :
