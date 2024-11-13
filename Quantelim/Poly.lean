@@ -852,7 +852,7 @@ def leadingCoeff {n : ℕ} (p : Poly (n+1)) : Poly n :=
 def eraseLead {n : ℕ} (p : Poly n) : Poly n :=
   ⟨PolyAux.eraseLead p.1, PolyAux.good_eraseLead p.2⟩
 
-def degree {n : ℕ} (p : Poly (n+1)) : WithBot ℕ := p.1.degree
+def degree {n : ℕ} (p : Poly n) : WithBot ℕ := p.1.degree
 
 def natDegree {n : ℕ} (p : Poly n) : ℕ := p.1.natDegree
 
@@ -997,6 +997,55 @@ theorem leadingCoeff_ne_zero {p : Poly (n+1)} : leadingCoeff p ≠ 0 ↔ p ≠ 0
 theorem degree_eq_bot {p : Poly (n+1)} : p.degree = ⊥ ↔ p = 0 := by
   rw [← degree_toPoly, Polynomial.degree_eq_bot, toPoly.map_eq_zero_iff]
 
+@[simp]
+theorem toPoly_dvd_toPoly {n : ℕ} {p q : Poly (n+1)} : toPoly p ∣ toPoly q ↔ p ∣ q := by
+  simp only [dvd_iff_exists_eq_mul_left]
+  rw [← Equiv.exists_congr toPoly.toEquiv]
+  intro a
+  rw [← toPoly.symm.injective.eq_iff]
+  simp
+
+@[simp]
+theorem toMvPoly_dvd_toMvPoly {n : ℕ} {p q : Poly n} : toMvPoly p ∣ toMvPoly q ↔ p ∣ q := by
+  simp only [dvd_iff_exists_eq_mul_left]
+  rw [← Equiv.exists_congr toMvPoly.toEquiv]
+  intro a
+  rw [← toMvPoly.symm.injective.eq_iff]
+  simp
+
+@[simp]
+theorem const_dvd_const {n : ℕ} {p q : Poly n} : const p ∣ const q ↔ p ∣ q := by
+  refine ⟨?_, map_dvd _⟩
+  rw [← toPoly_dvd_toPoly, toPoly_const, toPoly_const, Polynomial.C_dvd_iff_dvd_coeff,
+    ← toMvPoly_dvd_toMvPoly]
+  intro h
+  simpa using h 0
+
+@[simp]
+theorem intCast_dvd_intCast {n : ℕ} {x y : ℤ} : (x : Poly n) ∣ y ↔ x ∣ y := by
+  refine ⟨?_, map_dvd (Int.castRingHom _)⟩
+  rw [← toMvPoly_dvd_toMvPoly, map_intCast, map_intCast,
+    ← map_intCast (MvPolynomial.C : ℤ →+* MvPolynomial (Fin n) ℤ) x,
+    ← map_intCast (MvPolynomial.C : ℤ →+* MvPolynomial (Fin n) ℤ) y,
+    MvPolynomial.C_dvd_iff_dvd_coeff]
+  intro h
+  have := h 0
+  rw [MvPolynomial.coeff_C] at this
+  simpa
+
+theorem leadingCoeff_mul {n : ℕ} (p q : Poly (n+1)) :
+    leadingCoeff (p * q) = leadingCoeff p * leadingCoeff q := by
+  rw [← toMvPoly.injective.eq_iff, leadingCoeff_toPoly, map_mul,
+    Polynomial.leadingCoeff_mul]
+  simp [leadingCoeff_toPoly]
+
+theorem leadingCoeff_dvd_of_dvd {n : ℕ} {p q : Poly (n+1)} (h : p ∣ q) :
+    leadingCoeff p ∣ leadingCoeff q := by
+  rw [dvd_iff_exists_eq_mul_left] at h
+  rcases h with ⟨r, rfl⟩
+  rw [leadingCoeff_mul]
+  simp
+
 end defs
 
 variable {n : ℕ}
@@ -1030,13 +1079,13 @@ theorem modDiv_wf {p q : Poly (n+1)} (h : q.degree ≤ p.degree)
   have hq : leadingCoeff q ≠ 0 := leadingCoeff_ne_zero.2 hq0
   exact modDiv_wf_aux hq h (by simp [mul_comm, leadingCoeff_toPoly]) hq0
 
-theorem div_wf {p q : Poly (n+1)} {l : Poly n} (hq0 : q ≠ 0) (h : q.degree ≤ p.degree)
-    (hl : p.leadingCoeff  = l * q.leadingCoeff) :
+theorem div_wf {p q : Poly (n+1)} (l : Poly n) (hq0 : q ≠ 0) (h : q.degree ≤ p.degree)
+    (hl : p.leadingCoeff  = q.leadingCoeff * l) :
     (p - const l * X 0 ^ (p.natDegree - q.natDegree) * q).degree < p.degree := by
   suffices h : (const 1 * p - const l * X 0 ^ (p.natDegree - q.natDegree) * q).degree < p.degree by
     simpa using h
   apply modDiv_wf_aux one_ne_zero h _ hq0
-  rw [← leadingCoeff_toPoly, hl, map_mul, map_one, mul_one, leadingCoeff_toPoly]
+  rw [← leadingCoeff_toPoly, hl, map_mul, map_one, mul_one, leadingCoeff_toPoly, mul_comm]
 
 /-- returns `n` such that `leadingCoeff q ^ n * p = h * q + r` -/
 def pseudoModDiv : ∀ {n : ℕ} (p q : Poly (n+1)), (ℕ × Poly (n+1) ×
@@ -1057,33 +1106,68 @@ def pseudoModDiv : ∀ {n : ℕ} (p q : Poly (n+1)), (ℕ × Poly (n+1) ×
   else (0, 0, ⟨p, fun _ => lt_of_not_le h⟩)
   termination_by n p => (n+1, 1, degree p)
 
-
 /-- returns `p / q` if it exists, otherwise nonsense -/
 def divDvd : ∀ {n : ℕ} (p q : Poly n), { r : Poly n // q ∣ p → p = q * r }
   | 0, ⟨PolyAux.ofInt' x, _⟩, ⟨PolyAux.ofInt' y, _⟩ =>
     ⟨x.tdiv y, by
-      show
-      ⟩
+      show ((y : Poly 0) ∣ (x : Poly 0) → (x : Poly 0) = y * (_ : Poly 0))
+      simp only [intCast_dvd_intCast, ← Int.cast_mul]
+      intro hyx
+      rw [Int.mul_tdiv_cancel' hyx]⟩
   | _+1, p, q =>
     let dp := natDegree p
     let dq := natDegree q
     let lp := p.leadingCoeff
     let lq := q.leadingCoeff
-    let l := divDvd lp lq
+    have ⟨l,hl⟩ := divDvd lp lq
+    have hld : q ∣ p → lp = lq * l :=
+      fun h => hl (leadingCoeff_dvd_of_dvd h)
     if h : degree q ≤ degree p then
-    if hp0 : p = 0 then ⟨0, by simp [hp0]⟩ else
-    if hq0 : q = 0 then ⟨0, by simp [hq0]⟩
-    else
-      let z := (const l * X 0 ^ (p.natDegree - q.natDegree) * q).eraseLead
-      sorry --have wf := div_wf hq0 h
-      let v := divDvd (p.eraseLead - z) q
-      sorry --v + const k * X 0 ^ (dp - dq)
-    else ⟨0, sorry⟩
+      if hp0 : p = 0 then ⟨0, by simp [hp0]⟩ else
+      if hq0 : q = 0 then ⟨0, by simp [hq0]⟩ else
+      if hl0 : lp = lq * l
+      then
+        have hlqp : lq ∣ lp := by by_contra h; simp_all
+        let z := (const l * X 0 ^ (p.natDegree - q.natDegree) * q)
+        have wf := div_wf l hq0 h hl0
+        have v := divDvd (p - z) q
+        ⟨v.1 + const l * X 0 ^ (p.natDegree - q.natDegree), by
+          rcases v with ⟨v, hv⟩
+          dsimp only
+          intro hqp
+          have := hv (dvd_sub hqp (by simp [z]))
+          rw [sub_eq_iff_eq_add] at this
+          conv_lhs => rw [this]
+          simp [z]
+          ring⟩
+      else ⟨0, by intro h; simp_all⟩
+    else ⟨0, by
+      intro hqp
+      rcases exists_eq_mul_right_of_dvd hqp with ⟨r, hr⟩
+      subst hr
+      rw [degree_mul] at h
+      by_cases hr : r = 0
+      · simp_all
+      · exfalso
+        exact h (le_add_of_nonneg_right (degree_nonneg_iff_ne_zero.2 hr))⟩
   termination_by n p => (n, degree p)
 
-instance : Div (Poly n) := ⟨divDvd⟩
+instance : Div (Poly n) := ⟨fun p q => divDvd p q⟩
 
 theorem div_def {n : ℕ} (p q : Poly n) : p / q = divDvd p q := rfl
+
+theorem div_mul_cancel_of_dvd {p q : Poly n} (h : q ∣ p) : (p / q) * q = p := by
+  rw [div_def]
+  rw [mul_comm, ← (divDvd p q).2 h]
+
+theorem mul_div_cancel_of_dvd {p q : Poly n} (h : q ∣ p) : q * (p / q) = p := by
+  rw [mul_comm, div_mul_cancel_of_dvd h]
+
+instance (p q : Poly n) : Decidable (p ∣ q) := decidable_of_iff (q / p * p = q) <| by
+  refine ⟨?_, div_mul_cancel_of_dvd⟩
+  intro h
+  rw [← h]
+  simp
 
 mutual
 
