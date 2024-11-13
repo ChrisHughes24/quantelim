@@ -1196,8 +1196,8 @@ def divDvd : ∀ {n : ℕ} (p q : Poly n), { r : Poly n // q ∣ p → p = q * r
     have ⟨l,hl⟩ := divDvd lp lq
     have hld : q ∣ p → lp = lq * l :=
       fun h => hl (leadingCoeff_dvd_of_dvd h)
-    if h : degree q ≤ degree p then
-      if hq0 : q = 0 then ⟨0, by simp [hq0]⟩ else
+    if hq0 : q = 0 then ⟨0, by simp [hq0]⟩
+    else if h : degree q ≤ degree p then
       if hl0 : lp = lq * l
       then
         have hlqp : lq ∣ lp := by by_contra h; simp_all
@@ -1242,6 +1242,42 @@ instance (p q : Poly n) : Decidable (p ∣ q) := decidable_of_iff (q / p * p = q
   rw [← h]
   simp
 
+@[simp]
+theorem mul_div_cancel {p q : Poly n} (hp0 : p ≠ 0) : (p * q) / p = q :=
+  mul_right_injective₀ hp0 (by simp only [mul_div_cancel_of_dvd (dvd_mul_right _ _)])
+
+@[simp]
+theorem mul_div_cancel' {p q : Poly n} (hp0 : p ≠ 0) : (q * p) / p = q := by
+  rw [mul_comm, mul_div_cancel hp0]
+
+@[simp]
+theorem zero_div_zero : (0 : Poly n) / 0 = 0 := by
+  cases n
+  · simp only [OfNat.ofNat]
+    simp only [Zero.zero, PolyAux.zero_def]
+    simp only [OfNat.ofNat, Int.ofNat, Int.cast, IntCast.intCast,
+      PolyAux.ofInt]
+    rw [div_def, Poly.divDvd]
+    simp; rfl
+  · rw [div_def, Poly.divDvd]
+    simp
+
+theorem div_eq_zero_iff {p q : Poly n} (h : p ∣ q) :
+    q / p = 0 ↔ q = 0 := by
+  rcases exists_eq_mul_right_of_dvd h with ⟨r, rfl⟩
+  by_cases hp0 : p = 0
+  · simp_all
+  · rw [mul_div_cancel]
+    simp_all
+    assumption
+
+theorem degree_div_le {p q : Poly (n+1)} (h : q ∣ p) : (p / q).degree ≤ p.degree := by
+  rcases exists_eq_mul_right_of_dvd h with ⟨r, rfl⟩
+  by_cases hq0 : q = 0
+  · subst hq0; simp
+  · rw [mul_div_cancel hq0, degree_mul]
+    exact le_add_of_nonneg_left (degree_nonneg_iff_ne_zero.2 (by rintro rfl; simp_all))
+
 mutual
 
 def cont {n : ℕ} (p : Poly (n+1)) : { c : Poly n //
@@ -1269,26 +1305,37 @@ def gCd : ∀ {n : ℕ} (p q : Poly n),
       rw [←Int.cast_natCast, intCast_dvd_intCast, intCast_dvd_intCast]
       simp only [Int.gcd_dvd_left, Int.gcd_dvd_right, Int.cast_natCast, true_and]
       intro p hpx hpy
-      rw [dvd_intCast_iff] at hpx
+      by_cases hx0 : x = 0
+      · subst hx0
+        by_cases hy0 : y = 0
+        · simp_all
+        · rw [dvd_intCast_iff hy0] at hpy
+          rcases hpy with ⟨g, rfl, hg⟩
+          rw [← Int.cast_natCast, intCast_dvd_intCast]
+          simpa
+      rw [dvd_intCast_iff hx0] at hpx
       rcases hpx with ⟨g, rfl, hg⟩
-      rw [intCast_dvd_intCast] at hpy
+      rw [← Int.cast_natCast, intCast_dvd_intCast]
+      exact Int.dvd_gcd hg (intCast_dvd_intCast.1 hpy)⟩
+  | n+1, p, q =>
+  if hq0 : q = 0 then ⟨p, by subst hq0; simp⟩
+  else
+    let c := cont q
+    let ⟨_, h, ⟨r, hr⟩⟩ := pseudoModDiv p (q / const c.1)
+    have _wf : r.degree < q.degree := by
+      simp only [Ne, div_eq_zero_iff (c.2.1), hq0] at hr
+      simp only [not_false_eq_true, forall_const] at hr
+      refine lt_of_lt_of_le hr.1 (degree_div_le c.2.1)
+    have hr : ∀ g, g ∣ q → g ∣ r → g ∣ p := by
+      intro g hgq hgr
 
-        ⟩
-  -- | n+1, p, q =>
-  --   if hq0 : q = 0 then p
-  --   else
-  --     let (pc, pp) := contPrim p
-  --     let (_, h, ⟨r, hr⟩) := pseudoModDiv pp q
-  --     have _wf : (if (r : Poly (n+1)) = 0 then 0 else 1 + (r : Poly (n+1)).degree) <
-  --         (if q = 0 then 0 else 1 + q.degree) := by
-  --       split_ifs with hr0
-  --       · simp_all
-  --       · by_cases hq0 : q.degree = 0
-  --         · simp_all
-  --         · simp only [add_lt_add_iff_left]
-  --           exact hr.1 (Nat.pos_iff_ne_zero.2 hq0)
-  --     let g := gCd q r -- v.1 is `1` or `-1` so multiplying is dividing.
-  --     g
+    have ⟨g, hg⟩ := gCd q r -- v.1 is `1` or `-1` so multiplying is dividing.
+    ⟨g, by
+      refine ⟨?_, hg.1, ?_⟩
+
+
+
+      ⟩
   termination_by n _ q => (n, 2, if q = 0 then 0 else 1 + degree q)
 
 end
