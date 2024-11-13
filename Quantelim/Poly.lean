@@ -1087,24 +1087,28 @@ theorem div_wf {p q : Poly (n+1)} (l : Poly n) (hq0 : q ≠ 0) (h : q.degree ≤
   apply modDiv_wf_aux one_ne_zero h _ hq0
   rw [← leadingCoeff_toPoly, hl, map_mul, map_one, mul_one, leadingCoeff_toPoly, mul_comm]
 
-/-- returns `n` such that `leadingCoeff q ^ n * p = h * q + r` -/
-def pseudoModDiv : ∀ {n : ℕ} (p q : Poly (n+1)), (ℕ × Poly (n+1) ×
-    {r : Poly (n+1) // q ≠ 0 → r.degree < q.degree}) :=
+/-- returns `m`, `h` and `r`such that `leadingCoeff q ^ m * p = h * q + r` -/
+def pseudoModDiv : ∀ {n : ℕ} (p q : Poly (n+1)), Σ (m : ℕ) (h : Poly (n+1)),
+    { r : Poly (n+1) // (q ≠ 0 → r.degree < q.degree) ∧
+      const (leadingCoeff q) ^ m * p = h * q + r } :=
   fun p q =>
   let dp := natDegree p
   let dq := natDegree q
   let lp := p.leadingCoeff
   let lq := q.leadingCoeff
   if h : degree q ≤ degree p then
-  if hp0 : p = 0 then (0, 0, ⟨0, by simp [WithBot.bot_lt_iff_ne_bot]⟩)
+  if hp0 : p = 0 then ⟨0, 0, ⟨0, by simp [WithBot.bot_lt_iff_ne_bot], by simp [*]⟩⟩
   else if hq0 : q = 0 then ⟨1, 0, ⟨0, by simp_all⟩⟩
   else
     let z := (const lp * X 0 ^ (dp - dq) * q)
     have wf := modDiv_wf h hq0
-    let (n, h, r) := pseudoModDiv (const lq * p - z) q
-    (n+1, h + const (lq ^ n * lp) * X 0 ^(dp - dq), r)
-  else (0, 0, ⟨p, fun _ => lt_of_not_le h⟩)
-  termination_by n p => (n+1, 1, degree p)
+    let ⟨n, h, ⟨r, hr₁, hr₂⟩⟩ := pseudoModDiv (const lq * p - z) q
+    ⟨n+1, h + const (lq ^ n * lp) * X 0 ^(dp - dq), ⟨r, hr₁, by
+      rw [add_mul, add_right_comm _ _ r, ← hr₂]
+      simp [z]
+      ring⟩⟩
+  else ⟨0, 0, ⟨p, fun _ => lt_of_not_le h, by simp⟩⟩
+  termination_by n p => (n+1, degree p)
 
 /-- returns `p / q` if it exists, otherwise nonsense -/
 def divDvd : ∀ {n : ℕ} (p q : Poly n), { r : Poly n // q ∣ p → p = q * r }
@@ -1123,7 +1127,6 @@ def divDvd : ∀ {n : ℕ} (p q : Poly n), { r : Poly n // q ∣ p → p = q * r
     have hld : q ∣ p → lp = lq * l :=
       fun h => hl (leadingCoeff_dvd_of_dvd h)
     if h : degree q ≤ degree p then
-      if hp0 : p = 0 then ⟨0, by simp [hp0]⟩ else
       if hq0 : q = 0 then ⟨0, by simp [hq0]⟩ else
       if hl0 : lp = lq * l
       then
