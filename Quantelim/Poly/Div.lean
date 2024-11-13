@@ -309,23 +309,17 @@ def gCd : ∀ {n : ℕ} (p q : Poly n),
 
 end
 
+instance : GCDMonoid (Poly n) where
+  gcd := fun p q => (gCd p q).1
+  lcm := fun p q => p * q / (gCd p q).1
+  gcd_dvd_left := fun p q => (gCd p q).2.1
+  gcd_dvd_right := fun p q => (gCd p q).2.2.1
+  dvd_gcd := fun h1 h2 => (gCd _ _).2.2.2  _ h1 h2
+  gcd_mul_lcm := fun p q => by
+    simp only
+    rw [mul_div_cancel_of_dvd]
+    exact dvd_mul_of_dvd_left (gCd p q).2.1 _
+  lcm_zero_left := fun p => by simp
+  lcm_zero_right := fun p => by simp
+
 end Poly
-
-open Poly
-
--- Invariants to maintain. No constant polys in any list. Eqs has smallest by lex leadingMon degree at head
-structure Ands (n : ℕ) : Type where
-  (eqs : List (Poly (n+1)))
-  (neq : Poly (n+1))
-  deriving DecidableEq
-
-namespace Ands
-
-def eval {n : ℕ} (φ : Ands n) (vars : Fin (n+1) → ℂ) : Prop :=
-  (∀ p ∈ φ.eqs, p.eval vars = 0) ∧ (φ.neq.eval vars ≠ 0)
-
-
-
---def reduceEqs {n : ℕ} (φ : Ands n) : Ands n × Ands n := sorry
-
-end Ands
