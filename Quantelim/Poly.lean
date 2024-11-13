@@ -806,6 +806,12 @@ def constAddXMul {n : ℕ} (p : Poly n) (q : Poly (n+1)) (hq0 : q ≠ 0) : Poly 
 theorem eval_constAddXMul (vars : Fin (n+1) → R) (p : Poly n) (q : Poly (n+1)) (hq0 : q ≠ 0) :
     eval vars (constAddXMul p q hq0) = eval vars p.const + vars 0 * eval vars q := rfl
 
+@[simp]
+theorem constAddXMul_eq_const_add_X_mul (p : Poly n) (q : Poly (n+1)) (hq0 : q ≠ 0) :
+    constAddXMul p q hq0 = p.const + X 0 * q := by
+  apply toPoly.injective
+  simp [toPoly]
+
 theorem toPoly_const (p : Poly n) : toPoly (const p) = Polynomial.C (toMvPoly p) :=
   show (toPoly.toRingHom.comp const) p = Polynomial.C.comp toMvPoly.toRingHom p from
     RingHom.congr_fun (hom_ext (by simp [toPoly, toMvPoly])) _
@@ -1033,6 +1039,46 @@ theorem intCast_dvd_intCast {n : ℕ} {x y : ℤ} : (x : Poly n) ∣ y ↔ x ∣
   rw [MvPolynomial.coeff_C] at this
   simpa
 
+theorem const_dvd_constAddXMul {n : ℕ} {p q : Poly n} {r : Poly (n+1)} (hq0 : r ≠ 0) :
+    const p ∣ constAddXMul q r hq0 ↔ p ∣ q ∧ const p ∣ r := by
+  refine ⟨?_, ?_⟩
+  · intro h
+    rw [← toPoly_dvd_toPoly, toPoly_const, constAddXMul_eq_const_add_X_mul,
+      map_add, toPoly_const, map_mul, toPoly_X_zero, Polynomial.C_dvd_iff_dvd_coeff] at h
+    have := h 0
+    simp at this
+    have := fun i => h (i + 1)
+    simp only [Polynomial.coeff_add, Polynomial.coeff_C_succ, Polynomial.coeff_X_mul,
+      zero_add, ← Polynomial.C_dvd_iff_dvd_coeff] at this
+    rw [← toPoly_const, toPoly_dvd_toPoly] at this
+    tauto
+  · intro h
+    rw [constAddXMul_eq_const_add_X_mul]
+    exact dvd_add (const_dvd_const.2 h.1) (dvd_mul_of_dvd_right h.2 _)
+
+theorem degree_le_of_dvd {n : ℕ} {p q : Poly (n+1)} (h : p ∣ q) : p.degree ≤ q.degree := by
+  rw [← degree_toPoly, ← degree_toPoly, toPoly_dvd_toPoly] at h
+  apply Polynomial.degree_le_of_dvd h
+
+theorem dvd_const_iff {n : ℕ} {p : Poly (n+1)} {q : Poly n} : p ∣ const q ↔ ∃ r : Poly n, p = const r ∧ r ∣ q := sorry
+
+theorem dvd_intCast_iff {n : ℕ} {x : ℤ} {p : Poly n} : p ∣ x ↔ ∃ y : ℤ, p = y ∧ y ∣ x :=
+  @recOn n (fun {n} p => p ∣ x ↔ ∃ y : ℤ, p = y ∧ y ∣ x) p
+    (by simp)
+    (fun {n} p ih => by
+      dsimp only
+      simp only [← map_intCast (@const n), const_dvd_const, const_injective.eq_iff]
+      exact ih)
+    (fun {n} p q hq0 ihp ihq => by
+      simp only at *
+      apply iff_of_false
+      · intro h
+        rcases exists_eq_mul_left_of_dvd h with ⟨r, hr⟩
+        apply_fun degree at hr
+        rw [degree_mul, degree_constAddXMul] at hr
+      )
+
+
 theorem leadingCoeff_mul {n : ℕ} (p q : Poly (n+1)) :
     leadingCoeff (p * q) = leadingCoeff p * leadingCoeff q := by
   rw [← toMvPoly.injective.eq_iff, leadingCoeff_toPoly, map_mul,
@@ -1174,39 +1220,54 @@ instance (p q : Poly n) : Decidable (p ∣ q) := decidable_of_iff (q / p * p = q
 
 mutual
 
-def contPrim : ∀ {n : ℕ} (p : Poly (n+1)), Poly n × Poly (n+1)
-  | _, const p => (p, 1)
-  | _, constAddXMul p q =>
-    let (c, q') := contPrim q
-    let g := gCd p c
-    let a := g / p
-    let b := g / c
-    (g, const a + X 0 * const b * q')
-  termination_by n p => (n+1, 0, sizeOf p)
+def cont {n : ℕ} (p : Poly (n+1)) : { c : Poly n //
+    const c ∣ p ∧ ∀ c': Poly n, const c' ∣ p → c' ∣ c } :=
+  @recOnSucc _ (fun {m} (p : Poly (m+1)) => m < n+1 →
+    { c : Poly m // const c ∣ p ∧ ∀ c': Poly m, const c' ∣ p → c' ∣ c }) p
+  (fun p _ => ⟨p, by simp⟩)
+  (fun m p q hq0 ih hm => by
+    simp only at ih
+    replace ih := ih hm
+    rcases ih with ⟨c, hc⟩
+    rcases gCd c p with ⟨g, ⟨hgc, hgp, hg⟩⟩
+    refine ⟨g, ?_, ?_⟩
+    · rw [const_dvd_constAddXMul]
+      refine ⟨hgp, dvd_trans (const_dvd_const.2 hgc) hc.1⟩
+    · intro c' hc'
+      rw [const_dvd_constAddXMul] at hc'
+      refine hg _ (hc.2 _ hc'.2) hc'.1) (Nat.lt_succ_self n)
 
 -- This returns the gcd
-def gCd : ∀ {n : ℕ} (_p _q : Poly n), Poly n
-  | 0, ofInt' x, ofInt' y => (Int.gcd x y : ℤ)
-  | n+1, p, q =>
-    if hq0 : q = 0 then p
-    else
-      let (pc, pp) := contPrim p
-      let (_, h, ⟨r, hr⟩) := pseudoModDiv pp q
-      have _wf : (if (r : Poly (n+1)) = 0 then 0 else 1 + (r : Poly (n+1)).degree) <
-          (if q = 0 then 0 else 1 + q.degree) := by
-        split_ifs with hr0
-        · simp_all
-        · by_cases hq0 : q.degree = 0
-          · simp_all
-          · simp only [add_lt_add_iff_left]
-            exact hr.1 (Nat.pos_iff_ne_zero.2 hq0)
-      let g := gCd q r -- v.1 is `1` or `-1` so multiplying is dividing.
-      g
+def gCd : ∀ {n : ℕ} (p q : Poly n),
+    { g : Poly n // g ∣ p ∧ g ∣ q ∧ ∀ g' : Poly n, g' ∣ p → g' ∣ q → g' ∣ g }
+  | 0, ⟨PolyAux.ofInt' x, _⟩, ⟨PolyAux.ofInt' y, _⟩ => ⟨Int.gcd x y, by
+      show _ ∣ (x : Poly 0) ∧ _ ∣ (y : Poly 0) ∧ ∀ _ : Poly 0, _ ∣ (x : Poly 0) → _ ∣ (y : Poly 0) → _ ∣ _
+      rw [←Int.cast_natCast, intCast_dvd_intCast, intCast_dvd_intCast]
+      simp only [Int.gcd_dvd_left, Int.gcd_dvd_right, Int.cast_natCast, true_and]
+      intro p hpx hpy
+      rw [dvd_intCast_iff] at hpx
+      rcases hpx with ⟨g, rfl, hg⟩
+      rw [intCast_dvd_intCast] at hpy
+
+        ⟩
+  -- | n+1, p, q =>
+  --   if hq0 : q = 0 then p
+  --   else
+  --     let (pc, pp) := contPrim p
+  --     let (_, h, ⟨r, hr⟩) := pseudoModDiv pp q
+  --     have _wf : (if (r : Poly (n+1)) = 0 then 0 else 1 + (r : Poly (n+1)).degree) <
+  --         (if q = 0 then 0 else 1 + q.degree) := by
+  --       split_ifs with hr0
+  --       · simp_all
+  --       · by_cases hq0 : q.degree = 0
+  --         · simp_all
+  --         · simp only [add_lt_add_iff_left]
+  --           exact hr.1 (Nat.pos_iff_ne_zero.2 hq0)
+  --     let g := gCd q r -- v.1 is `1` or `-1` so multiplying is dividing.
+  --     g
   termination_by n _ q => (n, 2, if q = 0 then 0 else 1 + degree q)
 
 end
-
-
 
 noncomputable def polyToMvPoly : Polynomial (MvPolynomial (Fin n) ℤ) →+* MvPolynomial (Fin (n+1)) ℤ :=
   Polynomial.eval₂RingHom (MvPolynomial.eval₂Hom (Int.castRingHom _)
@@ -1220,276 +1281,6 @@ theorem polyToMvPoly_toPoly {n : ℕ} (p : Poly (n+1)) :
   congr
   ext1 i
   induction i using Fin.cases <;> simp
-
--- @[simp]
--- theorem polyToMvPoly_C {n : ℕ} (p : MvPolynomial (Fin n) ℤ) :
---     polyToMvPoly (Polynomial.C p) = toMvPoly p := by
---   rw [polyToMvPoly, toPoly, apply_eval, toMvPoly]
---   simp
---   congr
---   ext1 i
---   induction i using Fin.cases <;> simp
-
-@[simp]
-theorem toMvPoly_X {n : ℕ} (i : Fin n) : toMvPoly (X i) = MvPolynomial.X i := by
-  simp [X, toMvPoly]
-
-@[simp]
-theorem toMvPoly_const {n : ℕ} (p : Poly n) : toMvPoly (const p) =
-    (toMvPoly p).rename Fin.succ := by
-  simp only [toMvPoly, eval]
-  rw [← AlgHom.coe_toRingHom, apply_eval]
-  simp
-
-@[simp]
-theorem toMvPoly_constAddXMul {n : ℕ} (p : Poly n) (q : Poly (n+1)) : toMvPoly (constAddXMul p q) =
-    (toMvPoly p).rename Fin.succ + MvPolynomial.X 0 * toMvPoly q := by
-  simp only [toMvPoly, eval]
-  rw [← AlgHom.coe_toRingHom, apply_eval]
-  simp
-
-
-@[simp]
-theorem toPoly_X_succ {n : ℕ} (i : Fin n) : toPoly (X i.succ) = Polynomial.C (MvPolynomial.X i) := by
-  simp [toPoly]
-
-@[simp]
-theorem toPoly_const {n : ℕ} (p : Poly n) : toPoly (const p) = Polynomial.C (toMvPoly p) := by
-  rw [toPoly, eval, toMvPoly, apply_eval]
-  simp
-
-@[simp]
-theorem toPoly_constAddXMul {n : ℕ} (p : Poly n) (q : Poly (n+1)) : toPoly (constAddXMul p q) = Polynomial.C (toMvPoly p) +
-    Polynomial.X * toPoly q  := by
-  simp only [toPoly, eval, toMvPoly, apply_eval]
-  simp
-
-@[simp]
-theorem toPoly_add {n : ℕ} (p q : Poly (n+1)) : toPoly (p + q) = toPoly p + toPoly q :=
-  eval_add _ _ _
-
-@[simp]
-theorem toPoly_mul {n : ℕ} (p q : Poly (n+1)) : toPoly (p * q) = toPoly p * toPoly q :=
-  eval_mul _ _ _
-
-@[simp]
-theorem toPoly_pow {n : ℕ} (p : Poly (n+1)) (m : ℕ) : toPoly (p ^ m) = toPoly p ^ m := eval_pow _ _ _
-
-@[simp]
-theorem toMvPoly_pow {n : ℕ} (p : Poly n) (m : ℕ) : toMvPoly (p ^ m) = toMvPoly p ^ m := eval_pow _ _ _
-
-@[simp]
-theorem toPoly_zero {n : ℕ} : toPoly (0 : Poly (n+1)) = 0 := eval_zero _
-
-@[simp]
-theorem toPoly_eraseLead : ∀ {n : ℕ} (p : Poly (n+1)),
-    p.eraseLead.toPoly = p.toPoly - Polynomial.C p.leadingCoeff.toMvPoly * Polynomial.X ^ p.degree := by
-  simp [toPoly, toMvPoly, apply_eval]
-
-@[simp]
-theorem toPoly_mulConstMulXPow : ∀ {n : ℕ} (p : Poly n) (m : ℕ) (q : Poly (n+1)),
-    (mulConstMulXPow p m q).toPoly = Polynomial.C p.toMvPoly * Polynomial.X ^ m * q.toPoly := by
-  simp [toPoly, toMvPoly, apply_eval, eval_mulConstMulXPow]
-
-@[simp]
-theorem toMvPoly_one {n : ℕ} : toMvPoly (1 : Poly n) = 1 := eval_one _
-
-@[simp]
-theorem toMvPoly_add {n : ℕ} (p q : Poly n) : toMvPoly (p + q) = toMvPoly p + toMvPoly q :=
-  eval_add _ _ _
-
-@[simp]
-theorem toMvPoly_ofInt' (z : ℤ) : toMvPoly (ofInt' z) = z := rfl
-
-@[simp]
-theorem toMvPoly_sub {n : ℕ} (p q : Poly n) : toMvPoly (p - q) = toMvPoly p - toMvPoly q :=
-  eval_sub _ _ _
-
-@[simp]
-theorem toPoly_sub {n : ℕ} (p q : Poly (n+1)) : toPoly (p - q) = toPoly p - toPoly q :=
-  eval_sub _ _ _
-
-@[simp]
-theorem toMvPoly_mul {n : ℕ} (p q : Poly n) : toMvPoly (p * q) = toMvPoly p * toMvPoly q :=
-  eval_mul _ _ _
-
-open Polynomial
-
-theorem toPoly_pseudoModDiv :  ∀ {n : ℕ} (p q : Poly (n+1)),
-    let (n, h, r) := pseudoModDiv p q
-    C q.leadingCoeff.toMvPoly ^ n * toPoly p - toPoly r  =
-       toPoly h * toPoly q :=
-  fun p q =>
-  if h : degree q ≤ degree p
-  then if hp0 : p = 0 then by
-    rw [pseudoModDiv]
-    simp [h, hp0, degree]
-    split_ifs <;> simp
-  else
-    if hq0 : q.degree = 0 then by
-      rw [pseudoModDiv]
-      simp [h, hp0, degree, hq0]
-      cases q
-      · simp [leadingCoeff, mul_comm]
-      · simp [degree] at hq0
-    else by
-      simp only
-      generalize hlp : p.leadingCoeff = lp
-      generalize hlq : q.leadingCoeff = lq
-      generalize hdp : p.degree = dp
-      generalize hz : (mulConstMulXPow lp (dp - q.degree) q).eraseLead = z
-      generalize hk : (pseudoModDiv ((mulConstMulXPow lq 0 p).eraseLead - z) q) = k
-      have wf := modDiv_wf lp lq h hq0
-      have ih := toPoly_pseudoModDiv ((mulConstMulXPow lq 0 p).eraseLead - z) q
-      rw [pseudoModDiv]
-      simp only [h, ↓reduceDIte, hp0, hq0, toPoly_add, toPoly_mul, toPoly_const, toMvPoly_mul,
-        toMvPoly_pow, map_mul, map_pow, toPoly_pow, toPoly_X_zero]
-      simp only [add_mul, mul_add, hlp, hlq, hdp, hz, hk] at ih ⊢
-      rw [← ih]
-      ring_nf
-      simp only [← hz, toPoly_sub, toPoly_eraseLead, toPoly_mulConstMulXPow, pow_zero, mul_one,
-        leadingCoeff_mulConstMulXPow, toMvPoly_mul, map_mul, degree_mulConstMulXPow, add_zero,
-        mul_sub]
-      ring_nf
-      simp only [mul_assoc, mul_left_comm (Polynomial.X ^ _), mul_comm (Polynomial.X ^q.degree)]
-      subst hdp hlp hlq
-      rw [← pow_add, Nat.sub_add_cancel h]
-      ring
-  else by
-    rw [pseudoModDiv]
-    simp only [h]
-    simp
-  termination_by n p => (n+1, 1, degree p)
-
-theorem toMvPoly_div : ∀ {n : ℕ} (p q : Poly n), toMvPoly q ∣ toMvPoly p →
-    toMvPoly q * (p / q).toMvPoly = p.toMvPoly
-  | 0, ofInt' x, ofInt' y, ⟨c, hc⟩ => by
-    simp only [toMvPoly_ofInt', div_def, divDvd, ofInt] at *
-    apply_fun MvPolynomial.eval (Fin.elim0) at hc
-    simp at hc
-    subst hc
-    rw [mul_comm, ← Int.cast_mul, Int.tdiv_mul_cancel]
-    simp
-  | n+1, const p, const q, ⟨c, hc⟩ => by
-      simp only [toMvPoly_const] at *
-      apply_fun (MvPolynomial.eval₂ (MvPolynomial.C) (fun (i : Fin (n+1)) =>
-        Fin.cases (n := n) 0 (fun i => (MvPolynomial.X i : MvPolynomial (Fin n) ℤ)) i)) at hc
-      simp only [MvPolynomial.eval₂_rename, Function.comp_def, Fin.cases_succ,
-        map_mul, MvPolynomial.eval₂_mul, div_def, divDvd, toMvPoly_const] at hc ⊢
-      simp only [MvPolynomial.eval₂_eta] at hc ⊢
-      have := toMvPoly_div p q ⟨_, hc⟩
-      rw [← this]
-      simp [div_def]
-  | n+1, constAddXMul p₁ p₂, const q, ⟨c, hc⟩ => by
-      simp [toMvPoly_const] at *
-      sorry
-  | _+1, p, constAddXMul q₁ q₂, _ => by
-    rw [div_def, divDvd]
-    split_ifs with hqp hp0
-    · simp [hp0, toMvPoly]
-    · simp
-      have :=
-
-
-mutual
-
-theorem toPoly_contPrim : ∀ {n : ℕ} (p : Poly (n+1)),
-    let cp := contPrim p
-    Polynomial.C (toMvPoly cp.1) * toPoly cp.2 = toPoly p ∧ (toPoly cp.2).IsPrimitive
-  | _, const p => by
-    simp [contPrim, toPoly, toMvPoly, Polynomial.smul_eq_C_mul, apply_eval]
-  | i, constAddXMul p q => by
-    let _ := UniqueFactorizationMonoid.toNormalizedGCDMonoid
-    let _ := @UniqueFactorizationMonoid.normalizationMonoid
-    have ih := toPoly_contPrim q
-    have ih_gcd := toMvPoly_gCd p q.contPrim.1
-    simp only at ih_gcd
-    simp only [contPrim, toPoly_constAddXMul] at ih ⊢
-    rw [← ih.1]
-    refine ⟨?_, ?_⟩
-    · rw [← ih_gcd.1, ← ih_gcd.2.1]
-      simp only [toMvPoly, toPoly, map_mul, apply_eval, eval, eval_zero,
-        Polynomial.smul_eq_C_mul, eval_add, eval_mul, zero_add, eval_ofInt]
-      simp [mul_add, add_mul, add_comm, add_left_comm, add_assoc, mul_assoc,
-        mul_comm, mul_left_comm]
-    · intro k hk
-      rcases h : q.contPrim with ⟨qc, qp⟩
-      rcases hg : p.gCd qc with ⟨g, a, b⟩
-      simp only [h, hg, toPoly_add, toPoly_mul, toPoly_X_zero, C_dvd_iff_dvd_coeff] at ih ih_gcd hk
-      have hka : k ∣ a.toMvPoly := by simpa using hk 0
-      replace hk := fun i => hk (i+1)
-      simp only [toPoly_const, X_mul_C, coeff_add, coeff_C_succ, zero_add,
-        ← mul_assoc, mul_right_comm _ (Polynomial.X), coeff_mul_X,
-        ← C_dvd_iff_dvd_coeff] at hk
-      rw [← dvd_content_iff_C_dvd, content_mul, content_C] at hk
-      replace hk := dvd_mul_gcd_of_dvd_mul hk
-      let m := gcd k qp.toPoly.content
-      have := ih.2 m (dvd_content_iff_C_dvd.1 (gcd_dvd_right _ _))
-      replace hk := (IsUnit.dvd_mul_right this).1 hk
-      rw [dvd_normalize_iff] at hk
-      have := ih_gcd.2.2.1 (k * g.toMvPoly)
-      by_cases hg0 : g.toMvPoly = 0
-      · simp_all [eq_comm]
-        exact isUnit_of_dvd_one hka
-      rw [← ih_gcd.1, ← ih_gcd.2.1, mul_comm k, mul_dvd_mul_iff_left hg0,
-        mul_dvd_mul_iff_left hg0] at this
-      have := this hka hk
-      have : g.toMvPoly * k ∣ g.toMvPoly * 1 := by simpa
-      rw [mul_dvd_mul_iff_left hg0] at this
-      exact isUnit_of_dvd_one this
-  termination_by n p => (n+1, 0, sizeOf p)
-
-theorem toMvPoly_gCd : ∀ {n : ℕ} (p q : Poly n),
-    let (g, a, b) := gCd p q
-    toMvPoly g * toMvPoly a = toMvPoly p ∧
-    toMvPoly g * toMvPoly b = toMvPoly q ∧
-    (∀ k : MvPolynomial (Fin n) ℤ, k ∣ toMvPoly p → k ∣ toMvPoly q → k ∣ toMvPoly g) ∧
-    (toMvPoly p = 0 → a = 1)
-  | 0, ofInt' x, ofInt' y => by
-    simp only [toMvPoly, gCd, eval_intCast, eval, ← Int.cast_mul,
-      Int.mul_tdiv_cancel' (Int.gcd_dvd_left), true_and,
-      Int.mul_tdiv_cancel' (Int.gcd_dvd_right), Int.cast_eq_zero]
-    admit
-  | n+1, p, q =>
-    if hq0 : q = 0 then by
-      simp [hq0, gCd, toMvPoly]
-    else by
-      rcases hcp : contPrim p with ⟨pc, pp⟩
-      rcases hmd : pseudoModDiv pp q with ⟨k, h, ⟨r, hr⟩⟩
-      have _wf : (if (r : Poly (n+1)) = 0 then 0 else 1 + (r : Poly (n+1)).degree) <
-          (if q = 0 then 0 else 1 + q.degree) := by
-        split_ifs with hr0
-        · simp_all
-        · by_cases hq0 : q.degree = 0
-          · simp_all
-          · simp only [add_lt_add_iff_left]
-            exact hr.1 (Nat.pos_iff_ne_zero.2 hq0)
-      rcases hg : gCd q r with ⟨g, a, b⟩
-      have ih := toMvPoly_gCd q r
-      simp only at ih
-      simp only
-      rw [gCd, dif_neg hq0, hcp]
-      simp only
-      simp only [hmd, ih.1, true_and]
-      simp only [toMvPoly_mul, hg, hmd]
-      simp only [hg, hmd] at ih ⊢
-      rw [hmd, hg]
-      simp only
-      have ⟨hdpg₁, hdpg₂⟩ := toPoly_pseudoModDiv p g
-      have ⟨hdpq₁, hdpq₂⟩ := toPoly_pseudoModDiv pp q
-      simp only [hmd] at hdpq₁ hdpq₂
-      simp only [← sub_eq_iff_eq_add] at hdpg₁
-      apply_fun polyToMvPoly at hdpg₁ hdpq₁
-      rw [← mul_assoc, mul_comm g.toMvPoly]
-      simp at hdpg₁ hdpq₁
-      rw [← hdpg₁]
-      rw [← ih.1, ← ih.2.1]  at hdpq₁
-
-
-
-  termination_by n _ q => (n, 2, if q = 0 then 0 else 1 + degree q)
-
-end
 
 end Poly
 
