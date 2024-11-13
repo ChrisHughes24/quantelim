@@ -1056,28 +1056,52 @@ theorem const_dvd_constAddXMul {n : ℕ} {p q : Poly n} {r : Poly (n+1)} (hq0 : 
     rw [constAddXMul_eq_const_add_X_mul]
     exact dvd_add (const_dvd_const.2 h.1) (dvd_mul_of_dvd_right h.2 _)
 
-theorem degree_le_of_dvd {n : ℕ} {p q : Poly (n+1)} (h : p ∣ q) : p.degree ≤ q.degree := by
-  rw [← degree_toPoly, ← degree_toPoly, toPoly_dvd_toPoly] at h
-  apply Polynomial.degree_le_of_dvd h
+theorem degree_le_zero_iff {n : ℕ} {p : Poly (n+1)} : p.degree ≤ 0 ↔ ∃ p', p = const p' := by
+  refine ⟨?_, ?_⟩
+  · rw [← degree_toPoly, Polynomial.degree_le_zero_iff]
+    intro h
+    use toMvPoly.symm ((toPoly p).coeff 0)
+    rw [← toPoly.injective.eq_iff]
+    conv_lhs => rw [h]
+    rw [toPoly_const]
+    simp
+  · rintro ⟨p, rfl⟩
+    simp [degree]; split_ifs <;> simp
 
-theorem dvd_const_iff {n : ℕ} {p : Poly (n+1)} {q : Poly n} : p ∣ const q ↔ ∃ r : Poly n, p = const r ∧ r ∣ q := sorry
+theorem dvd_const_iff {n : ℕ} {p : Poly (n+1)} {q : Poly n} (hq0 : q ≠ 0) :
+    p ∣ const q ↔ ∃ r : Poly n, p = const r ∧ r ∣ q := by
+  have hqm0 : toMvPoly q ≠ 0 := by
+    rwa [Ne, RingEquiv.map_eq_zero_iff toMvPoly]
+  refine ⟨?_, ?_⟩
+  · intro h
+    have h' := h
+    rw [← toPoly_dvd_toPoly, toPoly_const] at h'
+    rcases exists_eq_mul_left_of_dvd h' with ⟨r, hr⟩
+    have hr':= congr_arg Polynomial.degree hr
+    rw [Polynomial.degree_mul, Polynomial.degree_C hqm0] at hr'
+    rw [eq_comm, Nat.WithBot.add_eq_zero_iff, degree_toPoly] at hr'
+    rcases degree_le_zero_iff.1 (le_of_eq hr'.2) with ⟨p', rfl⟩
+    use p'
+    simp_all
+  · rintro ⟨r, rfl, hr⟩
+    simp_all
 
-theorem dvd_intCast_iff {n : ℕ} {x : ℤ} {p : Poly n} : p ∣ x ↔ ∃ y : ℤ, p = y ∧ y ∣ x :=
-  @recOn n (fun {n} p => p ∣ x ↔ ∃ y : ℤ, p = y ∧ y ∣ x) p
-    (by simp)
-    (fun {n} p ih => by
-      dsimp only
-      simp only [← map_intCast (@const n), const_dvd_const, const_injective.eq_iff]
-      exact ih)
-    (fun {n} p q hq0 ihp ihq => by
-      simp only at *
-      apply iff_of_false
-      · intro h
-        rcases exists_eq_mul_left_of_dvd h with ⟨r, hr⟩
-        apply_fun degree at hr
-        rw [degree_mul, degree_constAddXMul] at hr
-      )
-
+theorem dvd_intCast_iff {x : ℤ} {n : ℕ} {p : Poly n} (hx : x ≠ 0) : p ∣ x ↔ ∃ y : ℤ, p = y ∧ y ∣ x := by
+  induction n with
+  | zero =>
+    rcases p with ⟨⟨z⟩, hp⟩
+    show (z : Poly 0) ∣ x ↔ ∃ y : ℤ, (z : Poly 0) = y ∧ y ∣ x
+    rw [intCast_dvd_intCast]
+    simp
+  | succ n ih =>
+    have hx0 : (x : Poly n) ≠ 0 := by simp_all
+    rw [← map_intCast (@const n), dvd_const_iff hx0]
+    refine ⟨?_, ?_⟩
+    · rintro ⟨r, rfl, hr⟩
+      rcases ih.1 hr with ⟨y, rfl, hy⟩
+      use y; simp_all
+    · rintro ⟨y, rfl, hy⟩
+      use y; simp_all
 
 theorem leadingCoeff_mul {n : ℕ} (p q : Poly (n+1)) :
     leadingCoeff (p * q) = leadingCoeff p * leadingCoeff q := by
