@@ -134,7 +134,6 @@ theorem mul_div_cancel {p q : Poly n} (hp0 : p ≠ 0) : (p * q) / p = q :=
 theorem mul_div_cancel' {p q : Poly n} (hp0 : p ≠ 0) : (q * p) / p = q := by
   rw [mul_comm, mul_div_cancel hp0]
 
-@[simp]
 theorem zero_div_zero : (0 : Poly n) / 0 = 0 := by
   cases n
   · simp only [OfNat.ofNat]
@@ -145,6 +144,12 @@ theorem zero_div_zero : (0 : Poly n) / 0 = 0 := by
     simp; rfl
   · rw [div_def, Poly.divDvd]
     simp
+
+@[simp]
+theorem zero_div {p : Poly n} : 0 / p = 0 := by
+  by_cases hp0 : p = 0
+  · simp_all [zero_div_zero]
+  · exact mul_right_injective₀ hp0 (by simp [mul_div_cancel_of_dvd (dvd_zero _)])
 
 theorem div_eq_zero_iff {p q : Poly n} (h : p ∣ q) :
     q / p = 0 ↔ q = 0 := by
@@ -162,11 +167,32 @@ theorem degree_div_le {p q : Poly (n+1)} (h : q ∣ p) : (p / q).degree ≤ p.de
   · rw [mul_div_cancel hq0, degree_mul]
     exact le_add_of_nonneg_left (degree_nonneg_iff_ne_zero.2 (by rintro rfl; simp_all))
 
+def IsPrimitive (p : Poly (n+1)) : Prop :=
+  ∀ q, const q ∣ p → IsUnit q
+
+theorem isPrimitive_of_cont {c : Poly n} {p : Poly (n+1)} (hc0 : c ≠ 0)
+    (hc : const c ∣ p ∧ ∀ c': Poly n, const c' ∣ p → c' ∣ c) : IsPrimitive (p / const c) := by
+  intro a ha
+  have := hc.2 (c * a)
+  rw [map_mul, ← mul_div_cancel_of_dvd hc.1, mul_dvd_mul_iff_left] at this
+  have : c * a ∣ c * 1 := by simpa using this ha
+  rw [mul_dvd_mul_iff_left hc0] at this
+  exact isUnit_of_dvd_one this
+  simp_all
+
+theorem IsPrimitive.IsRelPrime_const {p : Poly (n+1)} (hp : IsPrimitive p) {c : Poly n}
+    (hc0 : c ≠ 0) : IsRelPrime (const c) p := by
+  intro a ha hc
+  rcases (dvd_const_iff hc0).1 ha with ⟨a, rfl, ha⟩
+  rw [const_dvd_const] at ha
+  rw [isUnit_iff_dvd_one, ← map_one (@const n), const_dvd_const, ← isUnit_iff_dvd_one]
+  exact hp _ hc
+
 mutual
 
-def cont {n : ℕ} (p : Poly (n+1)) : { c : Poly n //
+def cont : ∀ {n : ℕ} (p : Poly (n+1)), { c : Poly n //
     const c ∣ p ∧ ∀ c': Poly n, const c' ∣ p → c' ∣ c } :=
-  @recOnSucc _ (fun {m} (p : Poly (m+1)) => m < n+1 →
+  fun {n} p => @recOnSucc _ (fun {m} (p : Poly (m+1)) => m < n+1 →
     { c : Poly m // const c ∣ p ∧ ∀ c': Poly m, const c' ∣ p → c' ∣ c }) p
   (fun p _ => ⟨p, by simp⟩)
   (fun m p q hq0 ih hm => by
@@ -180,6 +206,7 @@ def cont {n : ℕ} (p : Poly (n+1)) : { c : Poly n //
     · intro c' hc'
       rw [const_dvd_constAddXMul] at hc'
       refine hg _ (hc.2 _ hc'.2) hc'.1) (Nat.lt_succ_self n)
+  termination_by n p => (n+1, 0, degree p)
 
 -- This returns the gcd
 def gCd : ∀ {n : ℕ} (p q : Poly n),
@@ -203,41 +230,84 @@ def gCd : ∀ {n : ℕ} (p q : Poly n),
       exact Int.dvd_gcd hg (intCast_dvd_intCast.1 hpy)⟩
   | n+1, p, q =>
   if hq0 : q = 0 then ⟨p, by subst hq0; simp⟩
+  else if hp0 : p = 0 then ⟨q, by subst hp0; simp⟩
   else
-    let cq := cont q
-    let cp := cont p
-    let ⟨_, h, ⟨r, hr⟩⟩ := pseudoModDiv (p / const cp.1) (q / const cq.1)
+    have ⟨cq, hcq⟩ := cont q
+    have ⟨cp, hcp⟩ := cont p
+    let ⟨k, h, ⟨r, hr⟩⟩ := pseudoModDiv (p / const cp) (q / const cq)
     have _wf : r.degree < q.degree := by
-      simp only [Ne, div_eq_zero_iff (cq.2.1), hq0] at hr
+      simp only [Ne, div_eq_zero_iff hcq.1, hq0] at hr
       simp only [not_false_eq_true, forall_const] at hr
-      refine lt_of_lt_of_le hr.1 (degree_div_le cq.2.1)
-    have hr : ∀ g, g ∣ q → g ∣ r → g ∣ p := by
-      intro g hgq hgr
-
-    have ⟨g, hg⟩ := gCd q r
-    have ⟨cg, hcg⟩ := gCd cp.1 cq.1
+      refine lt_of_lt_of_le hr.1 (degree_div_le hcq.1)
+    have ⟨g, hg⟩ := gCd (q / const cq) r
+    have ⟨cg, hcg⟩ := gCd cp cq
     ⟨const cg * g, by
-      refine ⟨?_, ?_, ?_⟩
-
-
-
-      ⟩
-  termination_by n _ q => (n, 2, if q = 0 then 0 else 1 + degree q)
+      generalize hq : q / const cq = q'
+      generalize hp : p / const cp = p'
+      have hcq0 : cq ≠ 0 := by rintro rfl; simp_all
+      have hcp0 : cp ≠ 0 := by rintro rfl; simp_all
+      have hq'P : (q / const cq).IsPrimitive := isPrimitive_of_cont hcq0 hcq
+      have hp'P : (p / const cp).IsPrimitive := isPrimitive_of_cont hcp0 hcp
+      have hp' := mul_div_cancel_of_dvd hcq.1
+      have hq' := mul_div_cancel_of_dvd hcp.1
+      simp only [hq, hp] at *; clear hp hq
+      simp only [← hp', ← hq'] at *
+      simp only [ne_eq, mul_eq_zero, const_eq_zero_iff, not_or, dvd_mul_right, true_and] at *
+      clear hp' hq'
+      have hcq0 : cq ≠ 0 := by rintro rfl; simp_all
+      have : ∀ g', g' ∣ q' → (g' ∣ r → g' ∣ p') := by
+        intro g' hgq hgr
+        have : IsRelPrime g' (const q'.leadingCoeff) := by
+          intro a hag halq
+          rw [dvd_const_iff] at halq
+          rcases halq with ⟨a, rfl, halq⟩
+          have haq : const a ∣ q' := dvd_trans hag hgq
+          have hacq : cq * a ∣ cq := hcq _ <| by
+            rw [map_mul, mul_dvd_mul_iff_left]
+            exact haq
+            simpa
+          have hacq : cq * a ∣ cq * 1 := by simpa
+          rw [mul_dvd_mul_iff_left hcq0, ← const_dvd_const, map_one] at hacq
+          exact isUnit_of_dvd_one hacq
+          simp_all
+        have hg1 : g' ∣ const q'.leadingCoeff ^k * p' := by
+          rw [hr.2]; exact dvd_add (dvd_mul_of_dvd_right hgq _) hgr
+        exact IsRelPrime.dvd_of_dvd_mul_left (IsRelPrime.pow_right this) hg1
+      refine ⟨mul_dvd_mul (const_dvd_const.2 hcg.1) (this g hg.1 hg.2.1),
+        mul_dvd_mul (const_dvd_const.2 hcg.2.1) hg.1, ?_⟩
+      intro g'' hgp hgq
+      have ⟨cg', hcg'⟩ := cont g''
+      have hcg'0 : cg' ≠ 0 := by rintro rfl; simp_all
+      have hg'P : IsPrimitive (g'' / const cg') := isPrimitive_of_cont hcg'0 hcg'
+      generalize hmn : g'' / const cg' = g'
+      have hg' := mul_div_cancel_of_dvd hcg'.1
+      simp only [hmn] at *; clear hmn
+      simp only [← hg'] at *; clear g'' hg'
+      refine mul_dvd_mul ?_ ?_
+      · rw [const_dvd_const]
+        refine hcg.2.2 _ ?_ ?_
+        · rw [← const_dvd_const]
+          refine IsRelPrime.dvd_of_dvd_mul_right ?_ (dvd_trans (dvd_mul_right _ _) hgp)
+          exact hp'P.IsRelPrime_const hcg'0
+        · rw [← const_dvd_const]
+          refine IsRelPrime.dvd_of_dvd_mul_right ?_ (dvd_trans (dvd_mul_right _ _) hgq)
+          exact hq'P.IsRelPrime_const hcg'0
+      · have hg'q : g' ∣ q' := by
+          refine IsRelPrime.dvd_of_dvd_mul_left ?_ (dvd_trans (dvd_mul_left _ _) hgq)
+          apply IsRelPrime.symm
+          exact hg'P.IsRelPrime_const hcq0
+        refine hg.2.2 _ hg'q ?_
+        · have hcp0 : cp ≠ 0 := by rintro rfl; simp_all
+          have hg'p : g' ∣ p' := by
+            refine IsRelPrime.dvd_of_dvd_mul_left ?_ (dvd_trans (dvd_mul_left _ _) hgp)
+            apply IsRelPrime.symm
+            exact hg'P.IsRelPrime_const hcp0
+          rw [add_comm _ r, ← sub_eq_iff_eq_add] at hr
+          rw [← hr.2]
+          exact dvd_sub (dvd_mul_of_dvd_right hg'p _) (dvd_mul_of_dvd_right hg'q _)⟩
+  termination_by n _ q => (n, 2, degree q)
 
 end
-
-noncomputable def polyToMvPoly : Polynomial (MvPolynomial (Fin n) ℤ) →+* MvPolynomial (Fin (n+1)) ℤ :=
-  Polynomial.eval₂RingHom (MvPolynomial.eval₂Hom (Int.castRingHom _)
-    (fun i => MvPolynomial.X i.succ)) (MvPolynomial.X 0)
-
-@[simp]
-theorem polyToMvPoly_toPoly {n : ℕ} (p : Poly (n+1)) :
-    polyToMvPoly (toPoly p) = toMvPoly p := by
-  rw [polyToMvPoly, toPoly, apply_eval, toMvPoly]
-  simp
-  congr
-  ext1 i
-  induction i using Fin.cases <;> simp
 
 end Poly
 
