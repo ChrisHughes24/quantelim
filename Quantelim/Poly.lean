@@ -707,6 +707,11 @@ instance : IsDomain (Poly n) := Equiv.isDomain ringEquivMvPolyAux
 instance : UniqueFactorizationMonoid (Poly n) :=
   (MulEquiv.uniqueFactorizationMonoid_iff ringEquivMvPolyAux.toMulEquiv).2 inferInstance
 
+instance : CharZero (Poly n) := ⟨by
+  intro a b
+  rw [← map_natCast ringEquivMvPolyAux.symm, ← map_natCast ringEquivMvPolyAux.symm,
+     ringEquivMvPolyAux.symm.injective.eq_iff]
+  exact fun h => Nat.cast_injective h⟩
 
 end CommRing
 
@@ -979,44 +984,59 @@ theorem C_toMvPoly (p : Poly n) : Polynomial.C (toMvPoly p) = toPoly (const p) :
 theorem degree_zero : degree (0 : Poly (n+1)) = ⊥ := by
   induction n <;> simp_all [degree, PolyAux.ofInt]
 
+@[simp]
+theorem leadingCoeff_eq_zero {p : Poly (n+1)} : leadingCoeff p = 0 ↔ p = 0 := by
+  rw [← (@toMvPoly n).injective.eq_iff, leadingCoeff_toPoly, map_zero,
+    Polynomial.leadingCoeff_eq_zero, toPoly.map_eq_zero_iff]
+
+@[simp]
+theorem leadingCoeff_ne_zero {p : Poly (n+1)} : leadingCoeff p ≠ 0 ↔ p ≠ 0 := by
+  rw [Ne, leadingCoeff_eq_zero]
+
+@[simp]
+theorem degree_eq_bot {p : Poly (n+1)} : p.degree = ⊥ ↔ p = 0 := by
+  rw [← degree_toPoly, Polynomial.degree_eq_bot, toPoly.map_eq_zero_iff]
+
 end defs
 
 variable {n : ℕ}
 
-theorem modDiv_wf {p q : Poly (n+1)} (lp lq : Poly n) (h : q.degree ≤ p.degree) (hp0 : p ≠ 0) (hq0 : q ≠ 0) :
-    (const q.leadingCoeff * p - const p.leadingCoeff * X 0 ^ (p.natDegree - q.natDegree) * q).degree < p.degree := by
-  have hp : leadingCoeff p ≠ 0 := by
-    rwa [Ne, ← (@toMvPoly n).injective.eq_iff, leadingCoeff_toPoly, map_zero,
-      Polynomial.leadingCoeff_eq_zero, toPoly.map_eq_zero_iff]
-  have hq : leadingCoeff q ≠ 0 := by
-    rwa [Ne, ← (@toMvPoly n).injective.eq_iff, leadingCoeff_toPoly, map_zero,
-      Polynomial.leadingCoeff_eq_zero, toPoly.map_eq_zero_iff]
+theorem modDiv_wf_aux {p q : Poly (n+1)} {lq lp : Poly n}
+    (hlq : lq ≠ 0) (h : q.degree ≤ p.degree)
+    (hlplq : (toPoly p).leadingCoeff * toMvPoly lq = toMvPoly lp * (toPoly q).leadingCoeff)
+    (hq0 : q ≠ 0) : (const lq * p - const lp * X 0 ^
+      (p.natDegree - q.natDegree) * q).degree < p.degree := by
+  have hlp : lp ≠ 0 := by rintro rfl; simp_all
+  have hp0 : p ≠ 0 := by rintro rfl; simp_all
   have hlt : natDegree q ≤ natDegree p :=
     (Nat.cast_le (α := WithBot ℕ)).1
       (by rw [← degree_eq_natDegree hp0, ← degree_eq_natDegree hq0]; exact h)
   refine lt_of_lt_of_le (degree_sub_lt ?_ ?_ ?_) ?_
-  · rw [mul_comm, degree_mul, degree_mul, degree_const_mul_X_pow hp, degree_eq_natDegree hp0,
+  · rw [mul_comm, degree_mul, degree_mul, degree_const_mul_X_pow hlp, degree_eq_natDegree hp0,
         degree_eq_natDegree hq0, ← Nat.cast_add, tsub_add_cancel_of_le hlt,
-        degree_const_of_ne_zero hq, add_zero]
+        degree_const_of_ne_zero hlq, add_zero]
   · rw [mul_ne_zero_iff, Ne, const_eq_zero_iff]
     tauto
   · rw [← toMvPoly.injective.eq_iff, leadingCoeff_toPoly, leadingCoeff_toPoly,
        map_mul, toPoly_const, map_mul, map_mul,
        map_pow, toPoly_X_zero, mul_right_comm, Polynomial.leadingCoeff_mul_X_pow,
-       Polynomial.leadingCoeff_mul, Polynomial.leadingCoeff_C, mul_comm, leadingCoeff_toPoly,
-       toPoly_const, Polynomial.leadingCoeff_mul, Polynomial.leadingCoeff_C,
-       leadingCoeff_toPoly]
+       Polynomial.leadingCoeff_mul, Polynomial.leadingCoeff_C, mul_comm,
+       toPoly_const, Polynomial.leadingCoeff_mul, Polynomial.leadingCoeff_C, hlplq]
+  · rw [degree_mul, degree_const_of_ne_zero hlq, zero_add]
 
-theorem div_wf {p q : Poly (n+1)} (lp : Poly n) (h : q.degree ≤ p.degree)
-    (hq0 : q.degree ≠ 0) :
-    (p.eraseLead - (mulConstMulXPow lp (p.degree - q.degree) q).eraseLead).degree < p.degree := by
-  refine lt_of_le_of_lt (degree_sub_le _ _) ?_
-  simp only [max_lt_iff]
-  refine ⟨lt_of_le_of_lt (degree_eraseLead _) ?_, lt_of_le_of_lt (degree_eraseLead _) ?_⟩
-  . exact lt_of_lt_of_le (Nat.sub_lt_self zero_lt_one (le_trans (Nat.one_le_iff_ne_zero.2 hq0) h)) le_rfl
-  · erw [degree_mulConstMulXPow, Nat.add_sub_cancel' h]
-    exact Nat.sub_lt_self zero_lt_one (le_trans (Nat.one_le_iff_ne_zero.2 hq0) h)
+theorem modDiv_wf {p q : Poly (n+1)} (h : q.degree ≤ p.degree)
+     (hq0 : q ≠ 0) : (const q.leadingCoeff * p - const p.leadingCoeff * X 0 ^
+      (p.natDegree - q.natDegree) * q).degree < p.degree := by
+  have hq : leadingCoeff q ≠ 0 := leadingCoeff_ne_zero.2 hq0
+  exact modDiv_wf_aux hq h (by simp [mul_comm, leadingCoeff_toPoly]) hq0
 
+theorem div_wf {p q : Poly (n+1)} {l : Poly n} (hq0 : q ≠ 0) (h : q.degree ≤ p.degree)
+    (hl : p.leadingCoeff  = l * q.leadingCoeff) :
+    (p - const l * X 0 ^ (p.natDegree - q.natDegree) * q).degree < p.degree := by
+  suffices h : (const 1 * p - const l * X 0 ^ (p.natDegree - q.natDegree) * q).degree < p.degree by
+    simpa using h
+  apply modDiv_wf_aux one_ne_zero h _ hq0
+  rw [← leadingCoeff_toPoly, hl, map_mul, map_one, mul_one, leadingCoeff_toPoly]
 
 /-- returns `n` such that `leadingCoeff q ^ n * p = h * q + r` -/
 def pseudoModDiv : ∀ {n : ℕ} (p q : Poly (n+1)), (ℕ × Poly (n+1) ×
@@ -1027,16 +1047,11 @@ def pseudoModDiv : ∀ {n : ℕ} (p q : Poly (n+1)), (ℕ × Poly (n+1) ×
   let lp := p.leadingCoeff
   let lq := q.leadingCoeff
   if h : degree q ≤ degree p then
-  if hp0 : p = 0 then (0, 0, ⟨0, by
-    simp [WithBot.bot_lt_iff_ne_bot]
-    rw [← Ne, ← degree_nonneg_iff_ne_zero]
-    intro h h1
-    rw [h1] at h
-    simp at h⟩)
+  if hp0 : p = 0 then (0, 0, ⟨0, by simp [WithBot.bot_lt_iff_ne_bot]⟩)
   else if hq0 : q = 0 then ⟨1, 0, ⟨0, by simp_all⟩⟩
   else
     let z := (const lp * X 0 ^ (dp - dq) * q)
-    have wf := modDiv_wf lp lq h hp0 hq0
+    have wf := modDiv_wf h hq0
     let (n, h, r) := pseudoModDiv (const lq * p - z) q
     (n+1, h + const (lq ^ n * lp) * X 0 ^(dp - dq), r)
   else (0, 0, ⟨p, fun _ => lt_of_not_le h⟩)
@@ -1044,26 +1059,26 @@ def pseudoModDiv : ∀ {n : ℕ} (p q : Poly (n+1)), (ℕ × Poly (n+1) ×
 
 
 /-- returns `p / q` if it exists, otherwise nonsense -/
-def divDvd : ∀ {n : ℕ} (_p _q : Poly n), Poly n
-  | 0, ofInt' x, ofInt' y => ofInt (x.tdiv y)
-  | _+1, const p, const q => const (divDvd p q)
-  | _+1, constAddXMul p₁ p₂, const q => constAddXMul (divDvd p₁ q) (divDvd p₂ (const q))
-  | _+1, p, constAddXMul q₁ q₂ =>
-    let q := constAddXMul q₁ q₂
-    let dp := degree p
-    let dq := degree q
+def divDvd : ∀ {n : ℕ} (p q : Poly n), { r : Poly n // q ∣ p → p = q * r }
+  | 0, ⟨PolyAux.ofInt' x, _⟩, ⟨PolyAux.ofInt' y, _⟩ =>
+    ⟨x.tdiv y, by
+      show
+      ⟩
+  | _+1, p, q =>
+    let dp := natDegree p
+    let dq := natDegree q
     let lp := p.leadingCoeff
     let lq := q.leadingCoeff
-    let k := divDvd lp lq
+    let l := divDvd lp lq
     if h : degree q ≤ degree p then
-    if hp0 : p = 0 then 0
+    if hp0 : p = 0 then ⟨0, by simp [hp0]⟩ else
+    if hq0 : q = 0 then ⟨0, by simp [hq0]⟩
     else
-      have hq0 : q.degree ≠ 0 := by simp [q, degree]
-      let z := (mulConstMulXPow k (dp - dq) q).eraseLead
-      have wf := div_wf k h hq0
+      let z := (const l * X 0 ^ (p.natDegree - q.natDegree) * q).eraseLead
+      sorry --have wf := div_wf hq0 h
       let v := divDvd (p.eraseLead - z) q
-      v + const k * X 0 ^ (dp - dq)
-    else 0
+      sorry --v + const k * X 0 ^ (dp - dq)
+    else ⟨0, sorry⟩
   termination_by n p => (n, degree p)
 
 instance : Div (Poly n) := ⟨divDvd⟩
