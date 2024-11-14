@@ -76,8 +76,44 @@ theorem degree_pMod_lt {p q : Poly (n+1)} (hq0 : q ≠ 0) : (pMod p q).degree < 
 theorem pMod_add_pDiv (p q : Poly (n+1)) : const (leadingCoeff q) ^ pModDivNat p q* p = pDiv p q * q + pMod p q :=
   (pseudoModDiv p q).2.2.2.2
 
-theorem pMod_eq_sub (p q : Poly (n+1)) : pMod p q =  const (leadingCoeff q) ^ pModDivNat p q* p - pDiv p q * q := by
+theorem pMod_eq_sub (p q : Poly (n+1)) : pMod p q = const (leadingCoeff q) ^ pModDivNat p q * p - pDiv p q * q := by
   rw [pMod_add_pDiv]; simp
+
+theorem pMod_eq_self_of_degree_lt {p q : Poly (n+1)} (h : p.degree < q.degree) : pMod p q = p := by
+  rw [pMod, pseudoModDiv, dite_cond_eq_false]
+  simpa
+
+@[simp]
+theorem pMod_zero_right (p : Poly (n+1)) : pMod p 0 = 0 := by
+  rw [pMod, pseudoModDiv, dite_cond_eq_true]
+  by_cases hp0 : p = 0
+  · subst hp0; rw [dite_cond_eq_true] <;> simp
+  · rw [dite_cond_eq_false, dite_cond_eq_true] <;> simp_all
+
+@[simp]
+theorem pMod_zero_left (p : Poly (n+1)) : pMod 0 p = 0 := by
+  by_cases hp0 : p = 0
+  · simp [hp0]
+  · rw [pMod, pseudoModDiv, dite_cond_eq_false]; simp_all
+
+theorem degree_pMod_le_right {p q : Poly (n+1)} : (pMod p q).degree ≤ q.degree := by
+  by_cases hq0 : q = 0
+  · simp [hq0]
+  · exact le_of_lt (degree_pMod_lt hq0)
+
+theorem degree_pMod_le_left {p q : Poly (n+1)} : (pMod p q).degree ≤ p.degree := by
+  by_cases h : p.degree < q.degree
+  · rw [pMod_eq_self_of_degree_lt h]
+  · exact le_trans degree_pMod_le_right (le_of_not_gt h)
+
+theorem natDegree_pMod_le_left {p q : Poly (n+1)} : (pMod p q).natDegree ≤ p.natDegree :=
+  natDegree_le_natDegree_of_degree_le_degree degree_pMod_le_left
+
+theorem natDegree_pMod_le_right {p q : Poly (n+1)} : (pMod p q).natDegree ≤ q.natDegree :=
+  natDegree_le_natDegree_of_degree_le_degree degree_pMod_le_right
+
+theorem natDegree_pMod_lt {p q : Poly (n+1)} (hq0 : 0 < q.degree) : (pMod p q).natDegree < q.natDegree :=
+  natDegree_lt_natDegree_of_degree_lt_degree_of_pos hq0 (degree_pMod_lt (by rintro rfl; simp_all))
 
 /-- returns `p / q` if it exists, otherwise nonsense -/
 def divDvd : ∀ {n : ℕ} (p q : Poly n), { r : Poly n // q ∣ p → p = q * r }

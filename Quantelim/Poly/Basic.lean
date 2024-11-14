@@ -1020,6 +1020,14 @@ theorem natDegree_lt_natDegree_of_degree_lt_degree {p q : Poly (n+1)} (hp0 : p �
   rw [← @Nat.cast_lt (WithBot ℕ), natDegree_eq_ite, natDegree_eq_ite]
   split_ifs <;> simp_all [degree_eq_natDegree]
 
+--Weirdly specific theorem
+theorem natDegree_lt_natDegree_of_degree_lt_degree_of_pos {p q : Poly (n+1)}
+    (hq0 : 0 < q.degree) :
+    p.degree < q.degree → p.natDegree < q.natDegree := by
+  rw [← @Nat.cast_lt (WithBot ℕ), natDegree_eq_ite, natDegree_eq_ite]
+  split_ifs <;> simp_all [degree_eq_natDegree]
+
+
 @[simp]
 theorem toPoly_X_zero {n : ℕ} : toPoly (X 0 : Poly (n+1)) = Polynomial.X := by
   simp [toPoly]
