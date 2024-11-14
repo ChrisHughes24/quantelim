@@ -21,9 +21,9 @@ theorem eval_lcm_eq_zero {p q : Poly n} {x : Fin n → R} : eval x (lcm p q) = 0
   intro h
   exact eval_eq_zero_of_dvd (dvd_trans (gcd_dvd_left p q) (dvd_lcm_left p q)) h
 
-theorem eval_pMod_eq_zero {p q : Poly (n+1)} {x : Fin (n+1) → R}
+theorem eval_pMod_eq_zero {q : Poly (n+1)} {x : Fin (n+1) → R}
     (hl : q.leadingCoeff.eval (fun i => x i.succ) ≠ 0)
-    (hq : eval x q = 0) :
+    (hq : eval x q = 0) (p : Poly (n+1)) :
     (pMod p q).eval x = 0 ↔ p.eval x = 0 := by
   rw [pMod_eq_sub p q, map_sub, map_mul, map_mul, hq, mul_zero, sub_zero,
     mul_eq_zero, map_pow, eval_const]
