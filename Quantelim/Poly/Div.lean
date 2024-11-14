@@ -6,7 +6,7 @@ variable {n : ℕ}
 
 theorem modDiv_wf_aux {p q : Poly (n+1)} {lq lp : Poly n}
     (hlq : lq ≠ 0) (h : q.degree ≤ p.degree)
-    (hlplq : (toPoly p).leadingCoeff * toMvPoly lq = toMvPoly lp * (toPoly q).leadingCoeff)
+    (hlplq : (toPolyMvPoly p).leadingCoeff * toMvPoly lq = toMvPoly lp * (toPolyMvPoly q).leadingCoeff)
     (hq0 : q ≠ 0) : (const lq * p - const lp * X 0 ^
       (p.natDegree - q.natDegree) * q).degree < p.degree := by
   have hlp : lp ≠ 0 := by rintro rfl; simp_all
@@ -20,18 +20,18 @@ theorem modDiv_wf_aux {p q : Poly (n+1)} {lq lp : Poly n}
         degree_const_of_ne_zero hlq, add_zero]
   · rw [mul_ne_zero_iff, Ne, const_eq_zero_iff]
     tauto
-  · rw [← toMvPoly.injective.eq_iff, leadingCoeff_toPoly, leadingCoeff_toPoly,
-       map_mul, toPoly_const, map_mul, map_mul,
-       map_pow, toPoly_X_zero, mul_right_comm, Polynomial.leadingCoeff_mul_X_pow,
+  · rw [← toMvPoly.injective.eq_iff, leadingCoeff_toPolyMvPoly, leadingCoeff_toPolyMvPoly,
+       map_mul, toPolyMvPoly_const, map_mul, map_mul,
+       map_pow, toPolyMvPoly_X_zero, mul_right_comm, Polynomial.leadingCoeff_mul_X_pow,
        Polynomial.leadingCoeff_mul, Polynomial.leadingCoeff_C, mul_comm,
-       toPoly_const, Polynomial.leadingCoeff_mul, Polynomial.leadingCoeff_C, hlplq]
+       toPolyMvPoly_const, Polynomial.leadingCoeff_mul, Polynomial.leadingCoeff_C, hlplq]
   · rw [degree_mul, degree_const_of_ne_zero hlq, zero_add]
 
 theorem modDiv_wf {p q : Poly (n+1)} (h : q.degree ≤ p.degree)
      (hq0 : q ≠ 0) : (const q.leadingCoeff * p - const p.leadingCoeff * X 0 ^
       (p.natDegree - q.natDegree) * q).degree < p.degree := by
   have hq : leadingCoeff q ≠ 0 := leadingCoeff_ne_zero.2 hq0
-  exact modDiv_wf_aux hq h (by simp [mul_comm, leadingCoeff_toPoly]) hq0
+  exact modDiv_wf_aux hq h (by simp [mul_comm, leadingCoeff_toPolyMvPoly]) hq0
 
 theorem div_wf {p q : Poly (n+1)} (l : Poly n) (hq0 : q ≠ 0) (h : q.degree ≤ p.degree)
     (hl : p.leadingCoeff  = q.leadingCoeff * l) :
@@ -39,7 +39,7 @@ theorem div_wf {p q : Poly (n+1)} (l : Poly n) (hq0 : q ≠ 0) (h : q.degree ≤
   suffices h : (const 1 * p - const l * X 0 ^ (p.natDegree - q.natDegree) * q).degree < p.degree by
     simpa using h
   apply modDiv_wf_aux one_ne_zero h _ hq0
-  rw [← leadingCoeff_toPoly, hl, map_mul, map_one, mul_one, leadingCoeff_toPoly, mul_comm]
+  rw [← leadingCoeff_toPolyMvPoly, hl, map_mul, map_one, mul_one, leadingCoeff_toPolyMvPoly, mul_comm]
 
 /-- returns `m`, `h` and `r`such that `leadingCoeff q ^ m * p = h * q + r` -/
 def pseudoModDiv : ∀ {n : ℕ} (p q : Poly (n+1)), Σ (m : ℕ) (h : Poly (n+1)),

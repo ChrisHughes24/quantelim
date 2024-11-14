@@ -780,7 +780,7 @@ theorem toInt_injective : Function.Injective (toInt : Poly 0 → ℤ) := by
   intro p q h
   rw [← intCast_toInt p, ← intCast_toInt q, h]
 
-noncomputable def toPoly : Poly (n+1) ≃+* Polynomial (MvPolynomial (Fin n) ℤ) :=
+noncomputable def toPolyMvPoly : Poly (n+1) ≃+* Polynomial (MvPolynomial (Fin n) ℤ) :=
   RingEquiv.ofHomInv
     (eval (Fin.cons Polynomial.X (fun i : Fin n => Polynomial.C (MvPolynomial.X i))) :
        _ →+* Polynomial (MvPolynomial (Fin n) ℤ))
@@ -833,12 +833,12 @@ theorem eval_constAddXMul (vars : Fin (n+1) → R) (p : Poly n) (q : Poly (n+1))
 @[simp]
 theorem constAddXMul_eq_const_add_X_mul (p : Poly n) (q : Poly (n+1)) (hq0 : q ≠ 0) :
     constAddXMul p q hq0 = p.const + X 0 * q := by
-  apply toPoly.injective
-  simp [toPoly]
+  apply toPolyMvPoly.injective
+  simp [toPolyMvPoly]
 
-theorem toPoly_const (p : Poly n) : toPoly (const p) = Polynomial.C (toMvPoly p) :=
-  show (toPoly.toRingHom.comp const) p = Polynomial.C.comp toMvPoly.toRingHom p from
-    RingHom.congr_fun (hom_ext (by simp [toPoly, toMvPoly])) _
+theorem toPolyMvPoly_const (p : Poly n) : toPolyMvPoly (const p) = Polynomial.C (toMvPoly p) :=
+  show (toPolyMvPoly.toRingHom.comp const) p = Polynomial.C.comp toMvPoly.toRingHom p from
+    RingHom.congr_fun (hom_ext (by simp [toPolyMvPoly, toMvPoly])) _
 
 @[recursor 2]
 def recOnAux : ∀ {n : ℕ} {C : ∀ {n : ℕ}, Poly n → Sort*} (p : PolyAux n) (hp : p.Good)
@@ -886,21 +886,21 @@ def natDegree {n : ℕ} (p : Poly n) : ℕ := p.1.natDegree
 theorem degree_nonneg_iff_ne_zero {n : ℕ} {p : Poly (n+1)} : 0 ≤ p.degree ↔ p ≠ 0 := by
   erw [(PolyAux.degree_nonneg_iff_ne_zero p.1 p.2), val_ne_zero]
 
-theorem degree_toPoly {n : ℕ} (p : Poly (n+1)) : (toPoly p).degree = p.degree :=
-  @recOnSucc n (fun p => (toPoly p).degree = p.degree) p
+theorem degree_toPolyMvPoly {n : ℕ} (p : Poly (n+1)) : (toPolyMvPoly p).degree = p.degree :=
+  @recOnSucc n (fun p => (toPolyMvPoly p).degree = p.degree) p
     (by
       intro n p
       by_cases hp : p = 0
       · subst hp; simp [degree]
       · have hp01 : toMvPoly p ≠ 0 := by
           rwa [Ne, RingEquiv.map_eq_zero_iff toMvPoly]
-        rw [toPoly_const, Polynomial.degree_C hp01]
+        rw [toPolyMvPoly_const, Polynomial.degree_C hp01]
         show (0 : WithBot ℕ) = if _ then _ else _
         rw [if_neg]
         rwa [val_eq_zero])
     (by
       intro m p q hq ih
-      simp [toPoly, degree] at *
+      simp [toPolyMvPoly, degree] at *
       rw [← ih, add_comm, ← apply_eval]
       rw [Polynomial.degree_add_C, Polynomial.degree_mul, Polynomial.degree_X,
         add_comm]
@@ -914,18 +914,18 @@ def deriv {n : ℕ} (p : Poly (n+1)) : Poly (n+1) :=
 
 @[simp]
 theorem degree_neg {n : ℕ} (p : Poly (n+1)) : (-p).degree = p.degree := by
-  rw [← degree_toPoly, map_neg, Polynomial.degree_neg, degree_toPoly]
+  rw [← degree_toPolyMvPoly, map_neg, Polynomial.degree_neg, degree_toPolyMvPoly]
 
 theorem degree_add_le {n : ℕ} (p q : Poly (n+1)) : (p + q).degree ≤ max p.degree q.degree := by
-  rw [← degree_toPoly, ← degree_toPoly, map_add, ← degree_toPoly]
+  rw [← degree_toPolyMvPoly, ← degree_toPolyMvPoly, map_add, ← degree_toPolyMvPoly]
   apply Polynomial.degree_add_le
 
 theorem degree_sub_le {n : ℕ} (p q : Poly (n+1)) : (p - q).degree ≤ max p.degree q.degree := by
-  rw [← degree_toPoly, ← degree_toPoly, map_sub, ← degree_toPoly]
+  rw [← degree_toPolyMvPoly, ← degree_toPolyMvPoly, map_sub, ← degree_toPolyMvPoly]
   apply Polynomial.degree_sub_le
 
 theorem degree_mul {n : ℕ} (p q : Poly (n+1)) : (p * q).degree = p.degree + q.degree := by
-  rw [← degree_toPoly, ← degree_toPoly, map_mul, ← degree_toPoly]
+  rw [← degree_toPolyMvPoly, ← degree_toPolyMvPoly, map_mul, ← degree_toPolyMvPoly]
   apply Polynomial.degree_mul
 
 theorem degree_const_of_ne_zero {n : ℕ} {p : Poly n} (hp0 : p ≠ 0) : (const p : Poly (n+1)).degree = 0 := by
@@ -959,14 +959,14 @@ theorem Nat.WithBot.nonneg_iff_ne_bot (n : WithBot ℕ) : 0 ≤ n ↔ n ≠ ⊥ 
   · simp [Nat.zero_le]
 
 
-theorem leadingCoeff_toPoly {n : ℕ} (p : Poly (n+1)) : toMvPoly (leadingCoeff p) = Polynomial.leadingCoeff (toPoly p) :=
-  @recOnSucc n (fun p => toMvPoly (leadingCoeff p) = Polynomial.leadingCoeff (toPoly p)) p
+theorem leadingCoeff_toPolyMvPoly {n : ℕ} (p : Poly (n+1)) : toMvPoly (leadingCoeff p) = Polynomial.leadingCoeff (toPolyMvPoly p) :=
+  @recOnSucc n (fun p => toMvPoly (leadingCoeff p) = Polynomial.leadingCoeff (toPolyMvPoly p)) p
     (by
       intro n p
-      simp [toPoly, ← apply_eval, toMvPoly])
+      simp [toPolyMvPoly, ← apply_eval, toMvPoly])
     (by
       intro m p q hq ih
-      simp only [toMvPoly, MvPolynomial.coe_eval₂Hom, RingEquiv.coe_mk, Equiv.coe_fn_mk, toPoly,
+      simp only [toMvPoly, MvPolynomial.coe_eval₂Hom, RingEquiv.coe_mk, Equiv.coe_fn_mk, toPolyMvPoly,
         RingEquiv.ofHomInv_apply, leadingCoeff_constAddXMul, eval_constAddXMul, eval_const,
         Fin.cons_succ, Fin.cons_zero] at *
       rw [ih]
@@ -976,24 +976,24 @@ theorem leadingCoeff_toPoly {n : ℕ} (p : Poly (n+1)) : toMvPoly (leadingCoeff 
       rw [Polynomial.degree_mul, Polynomial.degree_X]
       refine add_pos_of_pos_of_nonneg zero_lt_one ?_
       rw [Nat.WithBot.nonneg_iff_ne_bot, Ne, Polynomial.degree_eq_bot]
-      show toPoly _ ≠ _
-      rwa [Ne, toPoly.map_eq_zero_iff])
+      show toPolyMvPoly _ ≠ _
+      rwa [Ne, toPolyMvPoly.map_eq_zero_iff])
 
 theorem degree_sub_lt {n : ℕ} {p q : Poly (n+1)} (h : p.degree = q.degree) (hq0 : p ≠ 0)
     (h : p.leadingCoeff = q.leadingCoeff) : (p - q).degree < p.degree := by
-  rw [← degree_toPoly, ← degree_toPoly, map_sub]
+  rw [← degree_toPolyMvPoly, ← degree_toPolyMvPoly, map_sub]
   apply Polynomial.degree_sub_lt
-  · rwa [degree_toPoly, degree_toPoly]
-  · rwa [Ne, toPoly.map_eq_zero_iff]
-  · rw [← leadingCoeff_toPoly, ← leadingCoeff_toPoly, h]
+  · rwa [degree_toPolyMvPoly, degree_toPolyMvPoly]
+  · rwa [Ne, toPolyMvPoly.map_eq_zero_iff]
+  · rw [← leadingCoeff_toPolyMvPoly, ← leadingCoeff_toPolyMvPoly, h]
 
-theorem natDegree_toPoly {n : ℕ} (p : Poly (n+1)) : (toPoly p).natDegree = p.natDegree := by
-  rw [natDegree, Polynomial.natDegree, degree_toPoly, PolyAux.natDegree]; rfl
+theorem natDegree_toPolyMvPoly {n : ℕ} (p : Poly (n+1)) : (toPolyMvPoly p).natDegree = p.natDegree := by
+  rw [natDegree, Polynomial.natDegree, degree_toPolyMvPoly, PolyAux.natDegree]; rfl
 
 theorem degree_eq_natDegree {n : ℕ} {p : Poly (n+1)} (hp0 : p ≠ 0) : p.degree = p.natDegree := by
-  rw [← degree_toPoly, ← natDegree_toPoly]
+  rw [← degree_toPolyMvPoly, ← natDegree_toPolyMvPoly]
   apply Polynomial.degree_eq_natDegree
-  rwa [Ne, toPoly.map_eq_zero_iff]
+  rwa [Ne, toPolyMvPoly.map_eq_zero_iff]
 
 @[simp]
 theorem natDegree_zero : (0 : Poly n).natDegree = 0 := by
@@ -1029,16 +1029,16 @@ theorem natDegree_lt_natDegree_of_degree_lt_degree_of_pos {p q : Poly (n+1)}
 
 
 @[simp]
-theorem toPoly_X_zero {n : ℕ} : toPoly (X 0 : Poly (n+1)) = Polynomial.X := by
-  simp [toPoly]
+theorem toPolyMvPoly_X_zero {n : ℕ} : toPolyMvPoly (X 0 : Poly (n+1)) = Polynomial.X := by
+  simp [toPolyMvPoly]
 
 @[simp]
 theorem degree_X_zero {n : ℕ} : (X 0 : Poly (n+1)).degree = 1 := by
-  rw [← degree_toPoly, toPoly_X_zero, Polynomial.degree_X]
+  rw [← degree_toPolyMvPoly, toPolyMvPoly_X_zero, Polynomial.degree_X]
 
 theorem degree_const_mul_X_pow {n : ℕ} {p : Poly n} (hp0 : p ≠ 0) (k : ℕ) :
     (const p * X 0 ^ k).degree = (k : WithBot ℕ) := by
-  rw [← degree_toPoly, map_mul, map_pow, toPoly_X_zero, toPoly_const]
+  rw [← degree_toPolyMvPoly, map_mul, map_pow, toPolyMvPoly_X_zero, toPolyMvPoly_const]
   rw [Polynomial.degree_C_mul_X_pow]
   rwa [Ne,toMvPoly.map_eq_zero_iff]
 
@@ -1053,13 +1053,13 @@ theorem const_injective : Function.Injective (@const n) := by
 theorem const_eq_zero_iff {n : ℕ} (p : Poly n) : const p = 0 ↔ p = 0 :=
   map_eq_zero_iff _ const_injective
 
-theorem C_toMvPoly (p : Poly n) : Polynomial.C (toMvPoly p) = toPoly (const p) := by
-  simp [toMvPoly, toPoly, apply_eval]
+theorem C_toMvPoly (p : Poly n) : Polynomial.C (toMvPoly p) = toPolyMvPoly (const p) := by
+  simp [toMvPoly, toPolyMvPoly, apply_eval]
 
 @[simp]
 theorem leadingCoeff_eq_zero {p : Poly (n+1)} : leadingCoeff p = 0 ↔ p = 0 := by
-  rw [← (@toMvPoly n).injective.eq_iff, leadingCoeff_toPoly, map_zero,
-    Polynomial.leadingCoeff_eq_zero, toPoly.map_eq_zero_iff]
+  rw [← (@toMvPoly n).injective.eq_iff, leadingCoeff_toPolyMvPoly, map_zero,
+    Polynomial.leadingCoeff_eq_zero, toPolyMvPoly.map_eq_zero_iff]
 
 @[simp]
 theorem leadingCoeff_ne_zero {p : Poly (n+1)} : leadingCoeff p ≠ 0 ↔ p ≠ 0 := by
@@ -1072,14 +1072,14 @@ theorem leadingCoeff_one : leadingCoeff (1 : Poly (n+1)) = 1 := by
 
 @[simp]
 theorem degree_eq_bot {p : Poly (n+1)} : p.degree = ⊥ ↔ p = 0 := by
-  rw [← degree_toPoly, Polynomial.degree_eq_bot, toPoly.map_eq_zero_iff]
+  rw [← degree_toPolyMvPoly, Polynomial.degree_eq_bot, toPolyMvPoly.map_eq_zero_iff]
 
 @[simp]
-theorem toPoly_dvd_toPoly {n : ℕ} {p q : Poly (n+1)} : toPoly p ∣ toPoly q ↔ p ∣ q := by
+theorem toPolyMvPoly_dvd_toPolyMvPoly {n : ℕ} {p q : Poly (n+1)} : toPolyMvPoly p ∣ toPolyMvPoly q ↔ p ∣ q := by
   simp only [dvd_iff_exists_eq_mul_left]
-  rw [← Equiv.exists_congr toPoly.toEquiv]
+  rw [← Equiv.exists_congr toPolyMvPoly.toEquiv]
   intro a
-  rw [← toPoly.symm.injective.eq_iff]
+  rw [← toPolyMvPoly.symm.injective.eq_iff]
   simp
 
 @[simp]
@@ -1093,7 +1093,7 @@ theorem toMvPoly_dvd_toMvPoly {n : ℕ} {p q : Poly n} : toMvPoly p ∣ toMvPoly
 @[simp]
 theorem const_dvd_const {n : ℕ} {p q : Poly n} : const p ∣ const q ↔ p ∣ q := by
   refine ⟨?_, map_dvd _⟩
-  rw [← toPoly_dvd_toPoly, toPoly_const, toPoly_const, Polynomial.C_dvd_iff_dvd_coeff,
+  rw [← toPolyMvPoly_dvd_toPolyMvPoly, toPolyMvPoly_const, toPolyMvPoly_const, Polynomial.C_dvd_iff_dvd_coeff,
     ← toMvPoly_dvd_toMvPoly]
   intro h
   simpa using h 0
@@ -1114,14 +1114,14 @@ theorem const_dvd_constAddXMul {n : ℕ} {p q : Poly n} {r : Poly (n+1)} (hq0 : 
     const p ∣ constAddXMul q r hq0 ↔ p ∣ q ∧ const p ∣ r := by
   refine ⟨?_, ?_⟩
   · intro h
-    rw [← toPoly_dvd_toPoly, toPoly_const, constAddXMul_eq_const_add_X_mul,
-      map_add, toPoly_const, map_mul, toPoly_X_zero, Polynomial.C_dvd_iff_dvd_coeff] at h
+    rw [← toPolyMvPoly_dvd_toPolyMvPoly, toPolyMvPoly_const, constAddXMul_eq_const_add_X_mul,
+      map_add, toPolyMvPoly_const, map_mul, toPolyMvPoly_X_zero, Polynomial.C_dvd_iff_dvd_coeff] at h
     have := h 0
     simp at this
     have := fun i => h (i + 1)
     simp only [Polynomial.coeff_add, Polynomial.coeff_C_succ, Polynomial.coeff_X_mul,
       zero_add, ← Polynomial.C_dvd_iff_dvd_coeff] at this
-    rw [← toPoly_const, toPoly_dvd_toPoly] at this
+    rw [← toPolyMvPoly_const, toPolyMvPoly_dvd_toPolyMvPoly] at this
     tauto
   · intro h
     rw [constAddXMul_eq_const_add_X_mul]
@@ -1129,12 +1129,12 @@ theorem const_dvd_constAddXMul {n : ℕ} {p q : Poly n} {r : Poly (n+1)} (hq0 : 
 
 theorem degree_le_zero_iff {n : ℕ} {p : Poly (n+1)} : p.degree ≤ 0 ↔ ∃ p', p = const p' := by
   refine ⟨?_, ?_⟩
-  · rw [← degree_toPoly, Polynomial.degree_le_zero_iff]
+  · rw [← degree_toPolyMvPoly, Polynomial.degree_le_zero_iff]
     intro h
-    use toMvPoly.symm ((toPoly p).coeff 0)
-    rw [← toPoly.injective.eq_iff]
+    use toMvPoly.symm ((toPolyMvPoly p).coeff 0)
+    rw [← toPolyMvPoly.injective.eq_iff]
     conv_lhs => rw [h]
-    rw [toPoly_const]
+    rw [toPolyMvPoly_const]
     simp
   · rintro ⟨p, rfl⟩
     simp [degree]; split_ifs <;> simp
@@ -1146,11 +1146,11 @@ theorem dvd_const_iff {n : ℕ} {p : Poly (n+1)} {q : Poly n} (hq0 : q ≠ 0) :
   refine ⟨?_, ?_⟩
   · intro h
     have h' := h
-    rw [← toPoly_dvd_toPoly, toPoly_const] at h'
+    rw [← toPolyMvPoly_dvd_toPolyMvPoly, toPolyMvPoly_const] at h'
     rcases exists_eq_mul_left_of_dvd h' with ⟨r, hr⟩
     have hr':= congr_arg Polynomial.degree hr
     rw [Polynomial.degree_mul, Polynomial.degree_C hqm0] at hr'
-    rw [eq_comm, Nat.WithBot.add_eq_zero_iff, degree_toPoly] at hr'
+    rw [eq_comm, Nat.WithBot.add_eq_zero_iff, degree_toPolyMvPoly] at hr'
     rcases degree_le_zero_iff.1 (le_of_eq hr'.2) with ⟨p', rfl⟩
     use p'
     simp_all
@@ -1184,9 +1184,9 @@ theorem isUnit_iff {n : ℕ} {p : Poly n} : IsUnit p ↔ p = 1 ∨ p = - 1 := by
 
 theorem leadingCoeff_mul {n : ℕ} (p q : Poly (n+1)) :
     leadingCoeff (p * q) = leadingCoeff p * leadingCoeff q := by
-  rw [← toMvPoly.injective.eq_iff, leadingCoeff_toPoly, map_mul,
+  rw [← toMvPoly.injective.eq_iff, leadingCoeff_toPolyMvPoly, map_mul,
     Polynomial.leadingCoeff_mul]
-  simp [leadingCoeff_toPoly]
+  simp [leadingCoeff_toPolyMvPoly]
 
 theorem leadingCoeff_pow {m : ℕ} (p : Poly (n+1)): leadingCoeff (p ^ m) = leadingCoeff p ^ m := by
   induction m with
@@ -1196,7 +1196,7 @@ theorem leadingCoeff_pow {m : ℕ} (p : Poly (n+1)): leadingCoeff (p ^ m) = lead
 @[simp]
 theorem leadingCoeff_X_zero : leadingCoeff (X 0 : Poly (n+1)) = 1 := by
   apply toMvPoly.injective
-  rw [leadingCoeff_toPoly, toPoly_X_zero, Polynomial.leadingCoeff_X, map_one]
+  rw [leadingCoeff_toPolyMvPoly, toPolyMvPoly_X_zero, Polynomial.leadingCoeff_X, map_one]
 
 theorem leadingCoeff_dvd_of_dvd {n : ℕ} {p q : Poly (n+1)} (h : p ∣ q) :
     leadingCoeff p ∣ leadingCoeff q := by
