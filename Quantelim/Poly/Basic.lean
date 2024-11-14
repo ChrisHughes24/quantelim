@@ -822,6 +822,21 @@ theorem const_eq_eval : @const n = eval (fun i => X i.succ) := by
   ext
   rw [eval_X, const_X]
 
+@[simp]
+theorem toPoly_const (R : Type*) [CommRing R] (x : Fin n → R) (p : Poly n) :
+    toPoly R x (Poly.const p) = Polynomial.C (p.eval x) := by
+  simp [toPoly, ← apply_eval]
+
+@[simp]
+theorem toPoly_X_zero (R : Type*) [CommRing R] (x : Fin n → R) :
+    toPoly R x (X 0) = Polynomial.X := by
+  simp [toPoly, ← apply_eval]
+
+@[simp]
+theorem toPoly_X_succ (R : Type*) [CommRing R] (x : Fin n → R) (i : Fin n) :
+    toPoly R x (X i.succ) = Polynomial.C (x i) := by
+  simp [toPoly, ← apply_eval]
+
 def constAddXMul {n : ℕ} (p : Poly n) (q : Poly (n+1)) (hq0 : q ≠ 0) : Poly (n+1) :=
   ⟨PolyAux.constAddXMul p.1 q.1, PolyAux.Good.constAddXMul p.2 q.2 (by
     intro h
