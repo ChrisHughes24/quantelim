@@ -958,6 +958,7 @@ theorem Nat.WithBot.nonneg_iff_ne_bot (n : WithBot ℕ) : 0 ≤ n ↔ n ≠ ⊥ 
   · simp
   · simp [Nat.zero_le]
 
+
 theorem leadingCoeff_toPoly {n : ℕ} (p : Poly (n+1)) : toMvPoly (leadingCoeff p) = Polynomial.leadingCoeff (toPoly p) :=
   @recOnSucc n (fun p => toMvPoly (leadingCoeff p) = Polynomial.leadingCoeff (toPoly p)) p
     (by
@@ -995,6 +996,31 @@ theorem degree_eq_natDegree {n : ℕ} {p : Poly (n+1)} (hp0 : p ≠ 0) : p.degre
   rwa [Ne, toPoly.map_eq_zero_iff]
 
 @[simp]
+theorem natDegree_zero : (0 : Poly n).natDegree = 0 := by
+  simp [natDegree, PolyAux,natDegree, PolyAux.zero_def]
+  cases n <;> simp [PolyAux.ofInt, PolyAux.natDegree, PolyAux.zero_def]
+
+theorem natDegree_eq_ite {n : ℕ} (p : Poly (n+1)) :
+    p.natDegree = if p = 0 then 0 else p.degree := by
+  split_ifs with hp0
+  · subst hp0; simp
+  · rw [degree_eq_natDegree hp0]
+
+@[simp]
+theorem degree_zero : degree (0 : Poly (n+1)) = ⊥ := by
+  induction n <;> simp_all [degree, PolyAux.ofInt]
+
+theorem natDegree_le_natDegree_of_degree_le_degree {p q : Poly (n+1)} :
+    p.degree ≤ q.degree → p.natDegree ≤ q.natDegree := by
+  rw [← @Nat.cast_le (WithBot ℕ), natDegree_eq_ite, natDegree_eq_ite]
+  split_ifs <;> simp_all [degree_eq_natDegree]
+
+theorem natDegree_lt_natDegree_of_degree_lt_degree {p q : Poly (n+1)} (hp0 : p ≠ 0) :
+    p.degree < q.degree → p.natDegree < q.natDegree := by
+  rw [← @Nat.cast_lt (WithBot ℕ), natDegree_eq_ite, natDegree_eq_ite]
+  split_ifs <;> simp_all [degree_eq_natDegree]
+
+@[simp]
 theorem toPoly_X_zero {n : ℕ} : toPoly (X 0 : Poly (n+1)) = Polynomial.X := by
   simp [toPoly]
 
@@ -1021,10 +1047,6 @@ theorem const_eq_zero_iff {n : ℕ} (p : Poly n) : const p = 0 ↔ p = 0 :=
 
 theorem C_toMvPoly (p : Poly n) : Polynomial.C (toMvPoly p) = toPoly (const p) := by
   simp [toMvPoly, toPoly, apply_eval]
-
-@[simp]
-theorem degree_zero : degree (0 : Poly (n+1)) = ⊥ := by
-  induction n <;> simp_all [degree, PolyAux.ofInt]
 
 @[simp]
 theorem leadingCoeff_eq_zero {p : Poly (n+1)} : leadingCoeff p = 0 ↔ p = 0 := by
