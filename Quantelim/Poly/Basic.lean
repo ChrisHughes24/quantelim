@@ -255,7 +255,6 @@ theorem degree_nonneg_iff_ne_zero : ∀ {n : ℕ} (p : PolyAux n) (_hp : p.Good)
     cases h
     assumption
 
-@[simp]
 def natDegree {n : ℕ} (p : PolyAux n) : ℕ := p.degree.unbot' 0
 
 def deriv : ∀ {n : ℕ}, PolyAux (n + 1) → PolyAux (n + 1)
@@ -287,10 +286,23 @@ theorem eval_pow {n : ℕ} (p : PolyAux n) (m : ℕ) (vars : Fin n → K) :
     simp only [Function.comp_apply, eval_mul]
     rfl
 
+@[simp]
+theorem natDegree_const {n : ℕ} (p : PolyAux n) : natDegree (const p) = 0 := by
+  simp [natDegree, degree]; tauto
+
+theorem degree_eq_bot {n : ℕ} (p : PolyAux n) (hp : p.Good) : p.degree = ⊥ ↔ p = 0 := by
+  induction p <;> simp_all [degree, zero_def, ofInt]
+  cases hp; simp_all [zero_def, ofInt]
+
+-- @[simp]
+-- theorem natDegree_constAddXMul {n : ℕ} {p : PolyAux n} {q : PolyAux (n+1)} (hq0 : q ≠ 0) :
+--     natDegree (constAddXMul p q) = natDegree q + 1 := by
+--   rw [natDegree, natDegree]
+
 -- @[simp]
 -- theorem eval_eraseLead : ∀ {n : ℕ} (p : PolyAux (n+1)) (vars : Fin (n+1) → K),
 --      p.eraseLead.eval vars = p.eval vars - p.leadingCoeff.eval (fun i => vars i.succ) * vars 0 ^ p.natDegree
---   | _, const _, _ => by simp [natDegree, eraseLead, leadingCoeff]
+--   | _, const _, _ => by simp [eraseLead, leadingCoeff]
 --   | _, constAddXMul p q, _ => by
 --     simp only [eraseLead, leadingCoeff, eval, eval_constAddXMul', natDegree]
 --     rw [eval_eraseLead]
@@ -867,9 +879,6 @@ def recOnSucc  {n : ℕ} {C : ∀ {n : ℕ}, Poly (n+1) → Sort*} (p : Poly (n+
 def leadingCoeff {n : ℕ} (p : Poly (n+1)) : Poly n :=
   ⟨PolyAux.leadingCoeff p.1, PolyAux.good_leadingCoeff p.2⟩
 
-def eraseLead {n : ℕ} (p : Poly n) : Poly n :=
-  ⟨PolyAux.eraseLead p.1, PolyAux.good_eraseLead p.2⟩
-
 def degree {n : ℕ} (p : Poly n) : WithBot ℕ := p.1.degree
 
 def natDegree {n : ℕ} (p : Poly n) : ℕ := p.1.natDegree
@@ -921,6 +930,17 @@ theorem degree_mul {n : ℕ} (p q : Poly (n+1)) : (p * q).degree = p.degree + q.
 
 theorem degree_const_of_ne_zero {n : ℕ} {p : Poly n} (hp0 : p ≠ 0) : (const p : Poly (n+1)).degree = 0 := by
   simp [degree, *]
+
+@[simp]
+theorem degree_one : (1 : Poly (n+1)).degree = 0 := by
+  rw [← Int.cast_one, ← map_intCast (@const n)]
+  exact degree_const_of_ne_zero (by simp)
+
+@[simp]
+theorem degree_pow {n : ℕ} (p : Poly (n+1)) (k : ℕ) : (p ^ k).degree = k • p.degree := by
+  induction k with
+  | zero => simp
+  | succ k ih => simp [pow_succ, ih, degree_mul, add_mul]
 
 @[simp]
 theorem leadingCoeff_const {n : ℕ} (p : Poly n) : leadingCoeff (const p) = p := by
@@ -978,6 +998,10 @@ theorem degree_eq_natDegree {n : ℕ} {p : Poly (n+1)} (hp0 : p ≠ 0) : p.degre
 theorem toPoly_X_zero {n : ℕ} : toPoly (X 0 : Poly (n+1)) = Polynomial.X := by
   simp [toPoly]
 
+@[simp]
+theorem degree_X_zero {n : ℕ} : (X 0 : Poly (n+1)).degree = 1 := by
+  rw [← degree_toPoly, toPoly_X_zero, Polynomial.degree_X]
+
 theorem degree_const_mul_X_pow {n : ℕ} {p : Poly n} (hp0 : p ≠ 0) (k : ℕ) :
     (const p * X 0 ^ k).degree = (k : WithBot ℕ) := by
   rw [← degree_toPoly, map_mul, map_pow, toPoly_X_zero, toPoly_const]
@@ -1010,6 +1034,11 @@ theorem leadingCoeff_eq_zero {p : Poly (n+1)} : leadingCoeff p = 0 ↔ p = 0 := 
 @[simp]
 theorem leadingCoeff_ne_zero {p : Poly (n+1)} : leadingCoeff p ≠ 0 ↔ p ≠ 0 := by
   rw [Ne, leadingCoeff_eq_zero]
+
+@[simp]
+theorem leadingCoeff_one : leadingCoeff (1 : Poly (n+1)) = 1 := by
+  rw [← Int.cast_one, ← map_intCast (@const n), leadingCoeff_const, Int.cast_one]
+
 
 @[simp]
 theorem degree_eq_bot {p : Poly (n+1)} : p.degree = ⊥ ↔ p = 0 := by
@@ -1129,11 +1158,32 @@ theorem leadingCoeff_mul {n : ℕ} (p q : Poly (n+1)) :
     Polynomial.leadingCoeff_mul]
   simp [leadingCoeff_toPoly]
 
+theorem leadingCoeff_pow {m : ℕ} (p : Poly (n+1)): leadingCoeff (p ^ m) = leadingCoeff p ^ m := by
+  induction m with
+  | zero => simp
+  | succ m ih => simp [pow_succ, ih, leadingCoeff_mul]
+
+@[simp]
+theorem leadingCoeff_X_zero : leadingCoeff (X 0 : Poly (n+1)) = 1 := by
+  apply toMvPoly.injective
+  rw [leadingCoeff_toPoly, toPoly_X_zero, Polynomial.leadingCoeff_X, map_one]
+
 theorem leadingCoeff_dvd_of_dvd {n : ℕ} {p q : Poly (n+1)} (h : p ∣ q) :
     leadingCoeff p ∣ leadingCoeff q := by
   rw [dvd_iff_exists_eq_mul_left] at h
   rcases h with ⟨r, rfl⟩
   rw [leadingCoeff_mul]
   simp
+
+def eraseLead {n : ℕ} (p : Poly (n+1)) : Poly (n+1) :=
+  p - const p.leadingCoeff * X 0 ^ p.natDegree
+
+theorem degree_erase_lead_lt {p : Poly (n+1)} (hp0 : p ≠ 0) :
+    (eraseLead p).degree < p.degree := by
+  rw [eraseLead]
+  refine degree_sub_lt ?_ hp0 ?_
+  . rw [degree_mul, degree_const_of_ne_zero (leadingCoeff_ne_zero.2 hp0), zero_add,
+      degree_pow, degree_X_zero, degree_eq_natDegree hp0, nsmul_eq_mul, mul_one]
+  · simp [leadingCoeff_mul, leadingCoeff_pow, leadingCoeff_X_zero]
 
 end defs
