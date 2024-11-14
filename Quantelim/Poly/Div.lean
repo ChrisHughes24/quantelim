@@ -344,14 +344,14 @@ end
 
 instance : GCDMonoid (Poly n) where
   gcd := fun p q => (gCd p q).1
-  lcm := fun p q => p * q / (gCd p q).1
+  lcm := fun p q => p * (q / (gCd p q).1)
   gcd_dvd_left := fun p q => (gCd p q).2.1
   gcd_dvd_right := fun p q => (gCd p q).2.2.1
   dvd_gcd := fun h1 h2 => (gCd _ _).2.2.2  _ h1 h2
   gcd_mul_lcm := fun p q => by
     simp only
-    rw [mul_div_cancel_of_dvd]
-    exact dvd_mul_of_dvd_left (gCd p q).2.1 _
+    rw [mul_left_comm, mul_div_cancel_of_dvd]
+    exact (gCd p q).2.2.1
   lcm_zero_left := fun p => by simp
   lcm_zero_right := fun p => by simp
 
