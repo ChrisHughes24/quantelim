@@ -64,6 +64,18 @@ def pseudoModDiv : ∀ {n : ℕ} (p q : Poly (n+1)), Σ (m : ℕ) (h : Poly (n+1
   else ⟨0, 0, ⟨p, fun _ => lt_of_not_le h, by simp⟩⟩
   termination_by n p => (n+1, degree p)
 
+def pMod {n : ℕ} (p q : Poly (n+1)) : Poly (n+1) := (pseudoModDiv p q).2.2.1
+
+def pDiv {n : ℕ} (p q : Poly (n+1)) : Poly (n+1) := (pseudoModDiv p q).2.1
+
+def pModDivNat {n : ℕ} (p q : Poly (n+1)) : ℕ := (pseudoModDiv p q).1
+
+theorem degree_pMod_lt {p q : Poly (n+1)} (hq0 : q ≠ 0) : (pMod p q).degree < q.degree :=
+  (pseudoModDiv p q).2.2.2.1 hq0
+
+theorem pMod_add_pDiv {p q : Poly (n+1)} : const (leadingCoeff q) ^ pModDivNat p q* p = pDiv p q * q + pMod p q :=
+  (pseudoModDiv p q).2.2.2.2
+
 /-- returns `p / q` if it exists, otherwise nonsense -/
 def divDvd : ∀ {n : ℕ} (p q : Poly n), { r : Poly n // q ∣ p → p = q * r }
   | 0, ⟨PolyAux.ofInt' x, _⟩, ⟨PolyAux.ofInt' y, _⟩ =>
