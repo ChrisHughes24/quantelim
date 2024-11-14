@@ -73,8 +73,11 @@ def pModDivNat {n : ℕ} (p q : Poly (n+1)) : ℕ := (pseudoModDiv p q).1
 theorem degree_pMod_lt {p q : Poly (n+1)} (hq0 : q ≠ 0) : (pMod p q).degree < q.degree :=
   (pseudoModDiv p q).2.2.2.1 hq0
 
-theorem pMod_add_pDiv {p q : Poly (n+1)} : const (leadingCoeff q) ^ pModDivNat p q* p = pDiv p q * q + pMod p q :=
+theorem pMod_add_pDiv (p q : Poly (n+1)) : const (leadingCoeff q) ^ pModDivNat p q* p = pDiv p q * q + pMod p q :=
   (pseudoModDiv p q).2.2.2.2
+
+theorem pMod_eq_sub (p q : Poly (n+1)) : pMod p q =  const (leadingCoeff q) ^ pModDivNat p q* p - pDiv p q * q := by
+  rw [pMod_add_pDiv]; simp
 
 /-- returns `p / q` if it exists, otherwise nonsense -/
 def divDvd : ∀ {n : ℕ} (p q : Poly n), { r : Poly n // q ∣ p → p = q * r }
