@@ -1108,6 +1108,10 @@ theorem leadingCoeff_eq_zero {p : Poly (n+1)} : leadingCoeff p = 0 ↔ p = 0 := 
     Polynomial.leadingCoeff_eq_zero, toPolyMvPoly.map_eq_zero_iff]
 
 @[simp]
+theorem leadingCoeff_zero : leadingCoeff (0 : Poly (n+1)) = 0 := by
+  simp
+
+@[simp]
 theorem leadingCoeff_ne_zero {p : Poly (n+1)} : leadingCoeff p ≠ 0 ↔ p ≠ 0 := by
   rw [Ne, leadingCoeff_eq_zero]
 
@@ -1282,5 +1286,10 @@ theorem degree_toPoly_of_leadingCoeff_ne_zero {p : Poly (n+1)} {x : Fin n → R}
   erw [← leadingCoeff_toPolyMvPoly]
   simp [toMvPoly, apply_eval]
 
+theorem toPoly_ne_zero_of_leadingCoeff_ne_zero {p : Poly (n+1)} {x : Fin n → R}
+    (hp : p.leadingCoeff.eval x ≠ 0) : toPoly R x p ≠ 0 := by
+  rw [Ne, ← Polynomial.degree_eq_bot, degree_toPoly_of_leadingCoeff_ne_zero hp,
+    degree_eq_bot]
+  rintro rfl; simp_all
 
 end defs

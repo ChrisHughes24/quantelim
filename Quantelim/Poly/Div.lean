@@ -108,27 +108,30 @@ theorem mul_pDiv_cancel {p q : Poly (n+1)} (hq0 : q ≠ 0) :
   refine le_add_of_nonneg_left ?_
   exact degree_nonneg_iff_ne_zero.2 h
 
--- theorem toPoly_pMod_eq_mod_mul {K : Type*} [Field K] {p q : Poly (n+1)} {x : Fin n → K}
---     (hq0 : q.leadingCoeff.eval x ≠ 0) :
---     toPoly K x (pMod p q) = Polynomial.C (eval x q.leadingCoeff) ^ pModDivNat p q * toPoly K x p % toPoly K x q := by
-
-
-
 theorem toPoly_pMod_eq_zero_iff {K : Type*} [Field K] {p q : Poly (n+1)} {x : Fin n → K}
-    (hq0 : q.leadingCoeff.eval x ≠ 0) :
-    toPoly K x (pMod p q) = 0 ↔ toPoly K x q ∣ toPoly K x p := by
+    (hql0 : q.leadingCoeff.eval x ≠ 0) : toPoly K x (pMod p q) = 0 ↔ toPoly K x q ∣ toPoly K x p := by
   refine ⟨fun h => ?_, fun h => ?_⟩
   · rw [pMod_eq_sub, map_sub, map_mul, map_pow, map_mul, toPoly_const,
       sub_eq_zero] at h
     apply dvd_iff_exists_eq_mul_left.2
     use (Polynomial.C ((eval x q.leadingCoeff)⁻¹))^p.pModDivNat q * (toPoly K x (p.pDiv q))
     rw [mul_assoc, ← h, ← mul_assoc, ← map_pow, ← map_pow, ← map_mul, inv_pow]
-    rw [inv_mul_cancel₀ (pow_ne_zero _ hq0), map_one, one_mul]
+    rw [inv_mul_cancel₀ (pow_ne_zero _ hql0), map_one, one_mul]
   · rw [dvd_iff_exists_eq_mul_left] at h
     rcases h with ⟨r, hr⟩
-    rw [pMod_eq_sub]; simp only [map_sub, map_mul, map_pow, toPoly_const]
-    rw [hr]
-  --   sorry
+    have hpoq0 : toPoly K x q ≠ 0 := toPoly_ne_zero_of_leadingCoeff_ne_zero hql0
+    apply mul_left_injective₀ hpoq0
+    by_contra h
+    have hq0 : q ≠ 0 := by rintro rfl; simp_all
+    refine not_le_of_lt (degree_pMod_lt (p := p) hq0) ?_
+    refine le_trans ?_ (degree_toPoly_le (x:=x))
+    rw [pMod_eq_sub, map_sub, map_mul, map_pow, map_mul, hr, ← mul_assoc,
+      ← sub_mul] at h ⊢
+    rw [Polynomial.degree_mul]
+    rw [degree_toPoly_of_leadingCoeff_ne_zero hql0]
+    refine le_add_of_nonneg_left ?_
+    rw [← not_lt, Nat.WithBot.lt_zero_iff, Polynomial.degree_eq_bot]
+    simp_all
 
 theorem degree_pMod_le_right {p q : Poly (n+1)} : (pMod p q).degree ≤ q.degree := by
   by_cases hq0 : q = 0
