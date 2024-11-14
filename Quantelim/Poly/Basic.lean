@@ -764,6 +764,10 @@ theorem intCast_toInt (p : Poly 0) : (toInt p : Poly 0) = p :=
     ext i
     exact Fin.elim0 i
 
+theorem toInt_injective : Function.Injective (toInt : Poly 0 → ℤ) := by
+  intro p q h
+  rw [← intCast_toInt p, ← intCast_toInt q, h]
+
 noncomputable def toPoly : Poly (n+1) ≃+* Polynomial (MvPolynomial (Fin n) ℤ) :=
   RingEquiv.ofHomInv
     (eval (Fin.cons Polynomial.X (fun i : Fin n => Polynomial.C (MvPolynomial.X i))) :
@@ -1111,7 +1115,7 @@ theorem dvd_intCast_iff {x : ℤ} {n : ℕ} {p : Poly n} (hx : x ≠ 0) : p ∣ 
     · rintro ⟨y, rfl, hy⟩
       use y; simp_all
 
-theorem isUnit_iff {n : ℕ} (p : Poly n) : IsUnit p ↔ p = 1 ∨ p = - 1 := by
+theorem isUnit_iff {n : ℕ} {p : Poly n} : IsUnit p ↔ p = 1 ∨ p = - 1 := by
   rw [isUnit_iff_dvd_one, ← Int.cast_one, dvd_intCast_iff Int.one_ne_zero]
   simp only [← isUnit_iff_dvd_one, Int.isUnit_iff]
   refine ⟨fun ⟨y, hyp, hy⟩ => hyp ▸ by simpa only [Int.cast_inj, ← Int.cast_neg], ?_⟩
