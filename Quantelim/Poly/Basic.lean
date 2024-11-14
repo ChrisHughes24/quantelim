@@ -1103,6 +1103,14 @@ theorem dvd_intCast_iff {x : ℤ} {n : ℕ} {p : Poly n} (hx : x ≠ 0) : p ∣ 
     · rintro ⟨y, rfl, hy⟩
       use y; simp_all
 
+theorem isUnit_iff {n : ℕ} (p : Poly n) : IsUnit p ↔ p = 1 ∨ p = - 1 := by
+  rw [isUnit_iff_dvd_one, ← Int.cast_one, dvd_intCast_iff Int.one_ne_zero]
+  simp only [← isUnit_iff_dvd_one, Int.isUnit_iff]
+  refine ⟨fun ⟨y, hyp, hy⟩ => hyp ▸ by simpa only [Int.cast_inj, ← Int.cast_neg], ?_⟩
+  rintro (rfl | rfl)
+  · use 1; simp
+  · use -1; simp
+
 theorem leadingCoeff_mul {n : ℕ} (p q : Poly (n+1)) :
     leadingCoeff (p * q) = leadingCoeff p * leadingCoeff q := by
   rw [← toMvPoly.injective.eq_iff, leadingCoeff_toPoly, map_mul,
