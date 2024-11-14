@@ -1208,7 +1208,7 @@ theorem leadingCoeff_dvd_of_dvd {n : ℕ} {p q : Poly (n+1)} (h : p ∣ q) :
 def eraseLead {n : ℕ} (p : Poly (n+1)) : Poly (n+1) :=
   p - const p.leadingCoeff * X 0 ^ p.natDegree
 
-theorem degree_erase_lead_lt {p : Poly (n+1)} (hp0 : p ≠ 0) :
+theorem degree_eraseLead_lt {p : Poly (n+1)} (hp0 : p ≠ 0) :
     (eraseLead p).degree < p.degree := by
   rw [eraseLead]
   refine degree_sub_lt ?_ hp0 ?_
