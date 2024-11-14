@@ -3,5 +3,6 @@ import Quantelim.Formula
 import Quantelim.Poly.Basic
 import Quantelim.Poly.Div
 import Quantelim.Poly.Zeros
-import Quantelim.QuantifierFree
+import Quantelim.QuantElim.Ands
+import Quantelim.QuantElim.Divisibility
 import Quantelim.forMathlib
