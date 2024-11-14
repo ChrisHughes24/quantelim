@@ -73,10 +73,13 @@ def pModDivNat {n : ℕ} (p q : Poly (n+1)) : ℕ := (pseudoModDiv p q).1
 theorem degree_pMod_lt {p q : Poly (n+1)} (hq0 : q ≠ 0) : (pMod p q).degree < q.degree :=
   (pseudoModDiv p q).2.2.2.1 hq0
 
-theorem pMod_add_pDiv (p q : Poly (n+1)) : const (leadingCoeff q) ^ pModDivNat p q* p = pDiv p q * q + pMod p q :=
+theorem pMod_add_pDiv (p q : Poly (n+1)) : const (leadingCoeff q) ^ pModDivNat p q * p = pDiv p q * q + pMod p q :=
   (pseudoModDiv p q).2.2.2.2
 
 theorem pMod_eq_sub (p q : Poly (n+1)) : pMod p q = const (leadingCoeff q) ^ pModDivNat p q * p - pDiv p q * q := by
+  rw [pMod_add_pDiv]; simp
+
+theorem pDiv_eq_sub (p q : Poly (n+1)) : pDiv p q * q = const (leadingCoeff q) ^ pModDivNat p q * p - pMod p q := by
   rw [pMod_add_pDiv]; simp
 
 theorem pMod_eq_self_of_degree_lt {p q : Poly (n+1)} (h : p.degree < q.degree) : pMod p q = p := by
@@ -95,6 +98,37 @@ theorem pMod_zero_left (p : Poly (n+1)) : pMod 0 p = 0 := by
   by_cases hp0 : p = 0
   · simp [hp0]
   · rw [pMod, pseudoModDiv, dite_cond_eq_false]; simp_all
+
+theorem mul_pDiv_cancel {p q : Poly (n+1)} (hq0 : q ≠ 0) :
+    pDiv (p * q) q = const q.leadingCoeff ^ (p * q).pModDivNat q * p := by
+  refine (eq_of_sub_eq_zero ?_).symm
+  by_contra h
+  refine not_le_of_lt (degree_pMod_lt (p:=(p * q)) hq0) ?_
+  rw [pMod_eq_sub, ← mul_assoc, ← sub_mul, degree_mul]
+  refine le_add_of_nonneg_left ?_
+  exact degree_nonneg_iff_ne_zero.2 h
+
+-- theorem toPoly_pMod_eq_mod_mul {K : Type*} [Field K] {p q : Poly (n+1)} {x : Fin n → K}
+--     (hq0 : q.leadingCoeff.eval x ≠ 0) :
+--     toPoly K x (pMod p q) = Polynomial.C (eval x q.leadingCoeff) ^ pModDivNat p q * toPoly K x p % toPoly K x q := by
+
+
+
+theorem toPoly_pMod_eq_zero_iff {K : Type*} [Field K] {p q : Poly (n+1)} {x : Fin n → K}
+    (hq0 : q.leadingCoeff.eval x ≠ 0) :
+    toPoly K x (pMod p q) = 0 ↔ toPoly K x q ∣ toPoly K x p := by
+  refine ⟨fun h => ?_, fun h => ?_⟩
+  · rw [pMod_eq_sub, map_sub, map_mul, map_pow, map_mul, toPoly_const,
+      sub_eq_zero] at h
+    apply dvd_iff_exists_eq_mul_left.2
+    use (Polynomial.C ((eval x q.leadingCoeff)⁻¹))^p.pModDivNat q * (toPoly K x (p.pDiv q))
+    rw [mul_assoc, ← h, ← mul_assoc, ← map_pow, ← map_pow, ← map_mul, inv_pow]
+    rw [inv_mul_cancel₀ (pow_ne_zero _ hq0), map_one, one_mul]
+  · rw [dvd_iff_exists_eq_mul_left] at h
+    rcases h with ⟨r, hr⟩
+    rw [pMod_eq_sub]; simp only [map_sub, map_mul, map_pow, toPoly_const]
+    rw [hr]
+  --   sorry
 
 theorem degree_pMod_le_right {p q : Poly (n+1)} : (pMod p q).degree ≤ q.degree := by
   by_cases hq0 : q = 0
