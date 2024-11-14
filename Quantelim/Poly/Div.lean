@@ -78,12 +78,12 @@ theorem pMod_add_pDiv {p q : Poly (n+1)} : const (leadingCoeff q) ^ pModDivNat p
 
 /-- returns `p / q` if it exists, otherwise nonsense -/
 def divDvd : ∀ {n : ℕ} (p q : Poly n), { r : Poly n // q ∣ p → p = q * r }
-  | 0, ⟨PolyAux.ofInt' x, _⟩, ⟨PolyAux.ofInt' y, _⟩ =>
-    ⟨x.tdiv y, by
-      show ((y : Poly 0) ∣ (x : Poly 0) → (x : Poly 0) = y * (_ : Poly 0))
-      simp only [intCast_dvd_intCast, ← Int.cast_mul]
-      intro hyx
-      rw [Int.mul_tdiv_cancel' hyx]⟩
+  | 0, x, y =>
+    ⟨(toInt x).tdiv (toInt y), fun h => by
+      rw [← intCast_toInt y, ← intCast_toInt x, intCast_dvd_intCast] at h
+      apply toInt_injective
+      conv_lhs => rw [← Int.mul_tdiv_cancel' h]
+      simp⟩
   | _+1, p, q =>
     let dp := natDegree p
     let dq := natDegree q
@@ -146,21 +146,11 @@ theorem mul_div_cancel {p q : Poly n} (hp0 : p ≠ 0) : (p * q) / p = q :=
 theorem mul_div_cancel' {p q : Poly n} (hp0 : p ≠ 0) : (q * p) / p = q := by
   rw [mul_comm, mul_div_cancel hp0]
 
-theorem zero_div_zero : (0 : Poly n) / 0 = 0 := by
-  cases n
-  · simp only [OfNat.ofNat]
-    simp only [Zero.zero, PolyAux.zero_def]
-    simp only [OfNat.ofNat, Int.ofNat, Int.cast, IntCast.intCast,
-      PolyAux.ofInt]
-    rw [div_def, Poly.divDvd]
-    simp; rfl
-  · rw [div_def, Poly.divDvd]
-    simp
-
 @[simp]
 theorem zero_div {p : Poly n} : 0 / p = 0 := by
   by_cases hp0 : p = 0
-  · simp_all [zero_div_zero]
+  · subst hp0
+    cases n <;> simp [div_def, divDvd]
   · exact mul_right_injective₀ hp0 (by simp [mul_div_cancel_of_dvd (dvd_zero _)])
 
 theorem div_eq_zero_iff {p q : Poly n} (h : p ∣ q) :
@@ -223,23 +213,15 @@ def cont : ∀ {n : ℕ} (p : Poly (n+1)), { c : Poly n //
 -- This returns the gcd
 def gCd : ∀ {n : ℕ} (p q : Poly n),
     { g : Poly n // g ∣ p ∧ g ∣ q ∧ ∀ g' : Poly n, g' ∣ p → g' ∣ q → g' ∣ g }
-  | 0, ⟨PolyAux.ofInt' x, _⟩, ⟨PolyAux.ofInt' y, _⟩ => ⟨Int.gcd x y, by
-      show _ ∣ (x : Poly 0) ∧ _ ∣ (y : Poly 0) ∧ ∀ _ : Poly 0, _ ∣ (x : Poly 0) → _ ∣ (y : Poly 0) → _ ∣ _
-      rw [←Int.cast_natCast, intCast_dvd_intCast, intCast_dvd_intCast]
-      simp only [Int.gcd_dvd_left, Int.gcd_dvd_right, Int.cast_natCast, true_and]
+  | 0, x, y => ⟨Int.gcd (toInt x) (toInt y), by
+      rw [← Int.cast_natCast, ← intCast_toInt x, intCast_dvd_intCast,
+        ← Int.cast_natCast, ← intCast_toInt y,intCast_dvd_intCast]
+      simp only [map_intCast, Int.cast_id, Int.cast_natCast, Int.gcd_dvd_left, Int.gcd_dvd_right,
+        true_and]
       intro p hpx hpy
-      by_cases hx0 : x = 0
-      · subst hx0
-        by_cases hy0 : y = 0
-        · simp_all
-        · rw [dvd_intCast_iff hy0] at hpy
-          rcases hpy with ⟨g, rfl, hg⟩
-          rw [← Int.cast_natCast, intCast_dvd_intCast]
-          simpa
-      rw [dvd_intCast_iff hx0] at hpx
-      rcases hpx with ⟨g, rfl, hg⟩
-      rw [← Int.cast_natCast, intCast_dvd_intCast]
-      exact Int.dvd_gcd hg (intCast_dvd_intCast.1 hpy)⟩
+      rw [← intCast_toInt p, intCast_dvd_intCast] at hpx hpy
+      rw [← intCast_toInt p, ← Int.cast_natCast, intCast_dvd_intCast]
+      exact Int.dvd_gcd hpx hpy⟩
   | n+1, p, q =>
   if hq0 : q = 0 then ⟨p, by subst hq0; simp⟩
   else if hp0 : p = 0 then ⟨q, by subst hp0; simp⟩
