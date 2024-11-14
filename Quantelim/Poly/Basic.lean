@@ -1262,4 +1262,25 @@ theorem degree_eraseLead_lt {p : Poly (n+1)} (hp0 : p ≠ 0) :
       degree_pow, degree_X_zero, degree_eq_natDegree hp0, nsmul_eq_mul, mul_one]
   · simp [leadingCoeff_mul, leadingCoeff_pow, leadingCoeff_X_zero]
 
+theorem degree_toPoly_le {p : Poly (n+1)} {x : Fin n → R} : (toPoly R x p).degree ≤ degree p := by
+  rw [← degree_toPolyMvPoly]
+  have h : toPoly R x = RingHom.comp (Polynomial.mapRingHom
+    (MvPolynomial.eval₂Hom (Int.castRingHom _) x))
+      toPolyMvPoly.toRingHom := hom_ext (fun i => by induction i using Fin.cases <;> simp [toPoly, toPolyMvPoly])
+  rw [h, RingHom.comp_apply]
+  exact Polynomial.degree_map_le _ _
+
+theorem degree_toPoly_of_leadingCoeff_ne_zero {p : Poly (n+1)} {x : Fin n → R}
+    (hp : p.leadingCoeff.eval x ≠ 0) : (toPoly R x p).degree = degree p := by
+  rw [← degree_toPolyMvPoly]
+  have h : toPoly R x = RingHom.comp (Polynomial.mapRingHom
+    (MvPolynomial.eval₂Hom (Int.castRingHom _) x))
+      toPolyMvPoly.toRingHom := hom_ext (fun i => by induction i using Fin.cases <;> simp [toPoly, toPolyMvPoly])
+  rw [h, RingHom.comp_apply]
+  apply Polynomial.degree_map_eq_of_leadingCoeff_ne_zero
+  convert hp
+  erw [← leadingCoeff_toPolyMvPoly]
+  simp [toMvPoly, apply_eval]
+
+
 end defs
