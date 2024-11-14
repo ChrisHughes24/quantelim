@@ -734,6 +734,8 @@ theorem apply_eval {S : Type*} [CommRing S] (f : R →+* S) (vars : Fin n → R)
 theorem eval_X (i : Fin n) (vars : Fin n → R) : eval vars (X i) = vars i := by
   simp [eval, val_X]
 
+def toInt : Poly 0 →+* ℤ := eval Fin.elim0
+
 noncomputable def toMvPoly {n : ℕ} : Poly n ≃+* MvPolynomial (Fin n) ℤ where
   toFun := eval MvPolynomial.X
   invFun := MvPolynomial.eval₂Hom (Int.castRingHom _) X
@@ -755,6 +757,12 @@ theorem hom_ext {f g : Poly n →+* R} (h : ∀ i, f (X i) = g (X i)) : f = g :=
   ext p
   rw [← eval_X' p, apply_eval, apply_eval]
   simp only [h]
+
+theorem intCast_toInt (p : Poly 0) : (toInt p : Poly 0) = p :=
+  show ((Int.castRingHom (Poly 0)).comp toInt) p = RingHom.id _ p by
+    apply RingHom.congr_fun
+    ext i
+    exact Fin.elim0 i
 
 noncomputable def toPoly : Poly (n+1) ≃+* Polynomial (MvPolynomial (Fin n) ℤ) :=
   RingEquiv.ofHomInv
