@@ -759,6 +759,9 @@ noncomputable def toMvPoly {n : ℕ} : Poly n ≃+* MvPolynomial (Fin n) ℤ whe
   map_mul' := by simp
   map_add' := by simp
 
+noncomputable def toPoly (R : Type*) [CommRing R] (x : Fin n → R) : Poly (n+1) →+* Polynomial R :=
+  eval (Fin.cases Polynomial.X (fun i => Polynomial.C (x i)))
+
 theorem eval_X' (p : Poly n) : p.eval X = p := by
   apply toMvPoly.injective
   erw [apply_eval toMvPoly.toRingHom]
@@ -911,6 +914,34 @@ theorem degree_toPolyMvPoly {n : ℕ} (p : Poly (n+1)) : (toPolyMvPoly p).degree
 
 def deriv {n : ℕ} (p : Poly (n+1)) : Poly (n+1) :=
   ⟨PolyAux.deriv p.1, PolyAux.good_deriv p.2⟩
+
+@[simp]
+theorem deriv_const (p : Poly n) : (const p).deriv = 0 := by
+  apply Subtype.ext
+  simp [const, deriv, PolyAux.deriv]
+
+@[simp]
+theorem deriv_constAddXMul {n : ℕ} (p : Poly n) (q : Poly (n+1)) (hq0 : q ≠ 0) :
+    (constAddXMul p q hq0).deriv = q + X 0 * deriv q := by
+  apply toMvPoly.injective
+  cases p; cases q;
+  simp only [deriv, PolyAux.deriv, constAddXMul, toMvPoly, eval]
+  simp
+
+theorem toPoly_deriv (p : Poly (n+1)) : ∀ (x : Fin n → R),
+    toPoly R x (deriv p) = (toPoly R x p).derivative :=
+  @Poly.recOnSucc _ (fun {m} q => ∀ (x : Fin m → R),
+    toPoly R x (deriv q) = (toPoly R x q).derivative) p
+      (by simp [toPoly, forall_const, ← apply_eval])
+      (by
+        intro n p q hq0
+        simp only [deriv_constAddXMul]
+        simp only [toPoly, map_add, map_mul, eval_X, Fin.cases_zero,
+          constAddXMul_eq_const_add_X_mul, eval_const, Fin.cases_succ, ← apply_eval,
+          Polynomial.derivative_add, Polynomial.derivative_C, Polynomial.derivative_mul,
+          Polynomial.derivative_X, one_mul, zero_add, add_right_inj]
+        intro ih x
+        rw [ih])
 
 @[simp]
 theorem degree_neg {n : ℕ} (p : Poly (n+1)) : (-p).degree = p.degree := by
