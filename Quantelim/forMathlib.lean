@@ -82,6 +82,18 @@ theorem key {f g : K[X]} (hf0 : f ≠ 0) :
         ((rootMultiplicity_pos hg0).2 (h haf)))
   · simp [haf, rootMultiplicity_eq_zero haf]
 
+theorem key_forall {f g : K[X]} :
+     (∀ x, f.eval x = 0 → g.eval x = 0) ↔ f ∣ f.derivative * g ∧ (f = 0 → g = 0) := by
+  by_cases hf0 : f = 0
+  · simp only [hf0, eval_zero, forall_const, derivative_zero, zero_mul, dvd_refl, true_and]
+    exact ⟨zero_of_eval_zero _, by rintro rfl; simp⟩
+  · rw [key hf0]
+    simp [hf0]
+
+theorem key_exists {f g : K[X]} :
+    (∃ x, f.eval x = 0 ∧ g.eval x ≠ 0) ↔ ((¬ (f ∣ f.derivative * g) ∨ (f = 0 ∧ g ≠ 0)) ):= by
+  simp only [← not_forall_not, not_and_not_right, key_forall]; tauto
+
 theorem square_free_key {R : Type*} [CommRing R] [IsDomain R] [CharZero R]
     {f g a : R[X]} {hf0 : f ≠ 0} (hgf : g * a = f) (hgdf : g ∣ f.derivative) :
     (∀ x, f.eval x = 0 ↔ a.eval x = 0) := by
