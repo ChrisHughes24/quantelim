@@ -25,9 +25,19 @@ namespace Ands
 
 open Poly QuantFreeFormula
 
+def and (φ ψ : Ands n) : Ands n :=
+  { eqs := φ.eqs ++ ψ.eqs,
+    neq := lcm φ.neq ψ.neq }
+
+def eval_and (φ ψ : Ands n) :
+    (φ.and ψ).eval = φ.eval ∩ ψ.eval := by
+  ext x
+  simp [eval, and, forall_and, or_imp]
+  tauto
+
 def reduceWith (φ : Ands (n+1)) (i : Fin φ.eqs.length) : Ands (n + 1) where
   eqs := φ.eqs.mapIdx (fun j p => if i = j then p else pMod p (φ.eqs[i]))
-  neq := pMod φ.neq (φ.eqs.get i)
+  neq := φ.neq
 
 theorem mem_reduceWith {φ : Ands (n+1)} {i : Fin φ.eqs.length}
     {x : Fin (n+1) → ℂ} (hx : (φ.eqs[i]).leadingCoeff.eval (fun i => x i.succ) ≠ 0) :
@@ -40,7 +50,6 @@ theorem mem_reduceWith {φ : Ands (n+1)} {i : Fin φ.eqs.length}
   · intro h
     have := h.1 i i.prop
     simp only [↓reduceIte] at this
-    rw [eval_pMod_eq_zero hx this] at h
     simp only [h.2, not_false_eq_true, and_true]
     intro j hj
     replace h := h.1 j hj
@@ -50,7 +59,6 @@ theorem mem_reduceWith {φ : Ands (n+1)} {i : Fin φ.eqs.length}
   · intro h
     have := h.1 i i.prop
     simp only [↓reduceIte] at this
-    rw [eval_pMod_eq_zero hx this]
     simp only [h.2, not_false_eq_true, and_true]
     intro j hj
     replace h := h.1 j hj
@@ -180,19 +188,5 @@ theorem eval_reduceWithCaseSplit {n : ℕ} (φ : Ands (n+1)) (i : Fin φ.eqs.len
       mem_eraseLeadAt h, and_true, false_or]
   · simp only [Set.mem_union, Set.mem_inter_iff, mem_reduceWith h, Set.mem_setOf_eq, h,
       not_false_eq_true, and_true, and_false, or_false]
-
-section SpecialPair
-
-structure SpecialPair (n : ℕ) : Type where
-  ( a : Poly (n+1) )
-  ( b : Poly (n+1) )
-
-def eval (p : SpecialPair n) : Set (Fin n → ℂ) :=
-  { x | p.a.eval _ ∣  }
-
-
-
-
-end SpecialPair
 
 end Ands
