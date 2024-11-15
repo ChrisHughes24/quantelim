@@ -1010,6 +1010,10 @@ theorem degree_const_of_ne_zero {n : ℕ} {p : Poly n} (hp0 : p ≠ 0) : (const 
   simp [degree, *]
 
 @[simp]
+theorem natDegree_const {n : ℕ} (p : Poly n) : (const p : Poly (n+1)).natDegree = 0 := by
+  simp [natDegree, PolyAux.natDegree, const, PolyAux.natDegree]; tauto
+
+@[simp]
 theorem degree_one : (1 : Poly (n+1)).degree = 0 := by
   rw [← Int.cast_one, ← map_intCast (@const n)]
   exact degree_const_of_ne_zero (by simp)
