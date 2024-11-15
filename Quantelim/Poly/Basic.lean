@@ -265,6 +265,20 @@ def X : ∀ {n : ℕ}, Fin n → PolyAux n
   | _+1, ⟨0, _⟩ => constAddXMul 0 1
   | _+1, ⟨i+1, h⟩ => const (X ⟨i, Nat.lt_of_succ_lt_succ h⟩)
 
+def coeff : ∀ {n : ℕ}, PolyAux (n+1) → ℕ → PolyAux n
+  | _, const p, 0 => p
+  | _, const _, _+1 => 0
+  | _, constAddXMul p _, 0 => p
+  | _, constAddXMul _ q, i+1 => coeff q i
+
+theorem good_coeff : ∀ {n : ℕ} {p : PolyAux (n+1)} {i : ℕ} (h : Good p), Good (coeff p i)
+  | _, const p, 0, h => by cases h; simp [coeff]; assumption
+  | _, const _, _+1, h => good_ofInt
+  | _, constAddXMul p _, 0, h => by cases h; simp [coeff]; assumption
+  | _, constAddXMul _ q, i+1, h => by
+    cases h
+    simp only [coeff]
+    exact good_coeff (by assumption)
 
 @[simp]
 theorem eval_X : ∀ {n : ℕ}  (i : Fin n) (vars : Fin n → K),
@@ -762,6 +776,24 @@ noncomputable def toMvPoly {n : ℕ} : Poly n ≃+* MvPolynomial (Fin n) ℤ whe
 noncomputable def toPoly (R : Type*) [CommRing R] (x : Fin n → R) : Poly (n+1) →+* Polynomial R :=
   eval (Fin.cases Polynomial.X (fun i => Polynomial.C (x i)))
 
+def coeff (p : Poly (n+1)) (i : ℕ) : Poly n := ⟨p.1.coeff i, PolyAux.good_coeff p.2⟩
+
+@[simp]
+theorem toPoly_coeff : ∀ {n : ℕ} (x : Fin n → R) (p : Poly (n+1)) (i : ℕ),
+    (toPoly R x p).coeff i = (p.coeff i).eval x
+  | _, _, ⟨PolyAux.const p, _⟩, 0 => by
+    simp [coeff, PolyAux.coeff, toPoly, eval, ← PolyAux.apply_eval]
+  | _, _, ⟨PolyAux.const p, _⟩, i+1 => by
+    simp [coeff, PolyAux.coeff, toPoly, eval, ← PolyAux.apply_eval]
+  | _, _, ⟨PolyAux.constAddXMul p q, _⟩, 0 => by
+    simp [coeff, PolyAux.coeff, toPoly, eval, ← PolyAux.apply_eval]
+  | _, x, ⟨PolyAux.constAddXMul p q, h⟩, i+1 => by
+    have ih := toPoly_coeff x ⟨q, by cases h; assumption⟩ i
+    simp only [toPoly, eval, RingHom.coe_mk, MonoidHom.coe_mk, OneHom.coe_mk, coeff, PolyAux.eval,
+      Fin.cases_succ, ← PolyAux.apply_eval, Fin.cases_zero, Polynomial.coeff_add,
+      Polynomial.coeff_C_succ, Polynomial.coeff_X_mul, zero_add, PolyAux.coeff] at ih ⊢
+    rw [ih]
+
 theorem eval_X' (p : Poly n) : p.eval X = p := by
   apply toMvPoly.injective
   erw [apply_eval toMvPoly.toRingHom]
@@ -1257,6 +1289,11 @@ theorem leadingCoeff_dvd_of_dvd {n : ℕ} {p q : Poly (n+1)} (h : p ∣ q) :
 
 def eraseLead {n : ℕ} (p : Poly (n+1)) : Poly (n+1) :=
   p - const p.leadingCoeff * X 0 ^ p.natDegree
+
+theorem eraseLead_add_leadingCoeff_mul : ∀ {n : ℕ} (p : Poly (n+1)),
+    p = eraseLead p + const p.leadingCoeff * X 0 ^ p.natDegree := by
+  intro n p
+  rw [eraseLead, sub_add_cancel]
 
 theorem degree_eraseLead_lt {p : Poly (n+1)} (hp0 : p ≠ 0) :
     (eraseLead p).degree < p.degree := by
