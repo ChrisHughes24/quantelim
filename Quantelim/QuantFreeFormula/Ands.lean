@@ -460,5 +460,4 @@ def elimQuant : ∀ (φ : Ands (n+1)),
       simp [ψ, exists_or]⟩
   termination_by φ => sumDegs φ
 
-
 end Ands
