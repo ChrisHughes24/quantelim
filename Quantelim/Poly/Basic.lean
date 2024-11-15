@@ -1337,4 +1337,13 @@ theorem toPoly_ne_zero_of_leadingCoeff_ne_zero {p : Poly (n+1)} {x : Fin n → R
     degree_eq_bot]
   rintro rfl; simp_all
 
+theorem eval_cons_eq_toPoly_eval (p : Poly (n+1)) (x : Fin n → R) (y : R):
+    p.eval (Fin.cons y x) = (toPoly R x p).eval y := by
+  rw [toPoly, ← Polynomial.coe_evalRingHom, apply_eval]
+  congr
+  ext i
+  induction i using Fin.cases
+  · simp
+  · simp
+
 end defs

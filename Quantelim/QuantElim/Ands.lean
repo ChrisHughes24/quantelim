@@ -1,6 +1,7 @@
 import QuantElim.Poly.Zeros
 import QuantElim.QuantElim.QuantFreeFormula
 import Mathlib.Data.LazyList.Basic
+import QuantElim.forMathlib
 
 variable {n : ℕ}
 
@@ -48,14 +49,15 @@ theorem eval_false : (Ands.false n).eval = ∅ := by
 open Poly QuantFreeFormula
 
 def toQuantFreeFormula (φ : Ands n) : QuantFreeFormula n :=
-  (φ.eqs.foldr (fun p ψ => (eqZero p).and ψ) true).and (neZero φ.neq)
+  (φ.eqs.foldr (fun p ψ => (eqZero p).and ψ) tru).and (neZero φ.neq)
 
 @[simp]
 theorem eval_toQuantFreeFormula (φ : Ands n) :
     φ.toQuantFreeFormula.eval = φ.eval := by
   rcases φ with ⟨eqs, neq⟩
   ext x
-  simp only [QuantFreeFormula.eval, ne_eq, Set.mem_inter_iff, Set.mem_setOf_eq, eval,
+  simp only [toQuantFreeFormula, QuantFreeFormula.eval_and, QuantFreeFormula.eval, Set.inter_empty,
+    ne_eq, Set.inter_univ, Set.empty_union, Set.mem_inter_iff, Set.mem_setOf_eq, eval,
     and_congr_left_iff]
   intro h
   induction eqs with
@@ -333,21 +335,22 @@ theorem eval_elimConstantPolys (φ : Ands (n+1)) (i : Fin φ.eqs.length)
 def elimDegreesEqZero (φ : Ands (n+1)) (i : Fin φ.eqs.length) : QuantFreeFormula n :=
   let p := φ.eqs.get i
   let dp := (φ.eqs.get i).deriv
-  let φ' : List (Poly n) := (φ.eqs.eraseIdx i).map (fun p => p.eval (Fin.cases 0 Poly.X))
-  (QuantFreeFormula.iAnds φ' eqZero).and <|
-  (toPolyDivides p (dp * φ.neq)).not.or ((toPolyEqZero p).toQuantFreeFormula.and (toPolyNeZero dp))
+  (elimConstantPolys φ i).1.and <|
+  (toPolyDivides p (dp * φ.neq)).not.or ((toPolyEqZero p).toQuantFreeFormula.and (toPolyNeZero φ.neq))
 
 theorem eval_elimDegreesEqZero {φ : Ands (n+1)} {i : Fin φ.eqs.length}
     (h : ∀ j ≠ i, (φ.eqs.get j).degree ≤ 0) :
-    (elimDegreesEqZero φ i).eval = {x | ∃ y : ℂ, φ.eval (Fin.cons y x) } := by
-  ext x
-  rcases φ with ⟨eqs, neq⟩
-  simp [elimDegreesEqZero, List.get_eq_getElem, QuantFreeFormula.eval_and, eval_iAnds,
-    List.mem_map, QuantFreeFormula.eval, Set.inter_univ, ne_eq, Set.inter_empty, Set.union_empty,
-    Set.iInter_exists, Set.biInter_and', Set.iInter_iInter_eq_right, eval_or, eval_not,
-    eval_toQuantFreeFormula, eval_toPolyEqZero, eval_toPolyNeZero, Set.mem_inter_iff,
-    Set.mem_iInter, Set.mem_setOf_eq, Set.mem_union, Set.mem_compl_iff]
-
-
+    (elimDegreesEqZero φ i).eval = {x | ∃ y : ℂ,  (Fin.cons y x) ∈ φ.eval } := by
+  have := eval_elimConstantPolys φ i h
+  dsimp only at this
+  rw [this, elimDegreesEqZero, QuantFreeFormula.eval_and]; clear this
+  congr
+  simp only [List.get_eq_getElem, eval_or, eval_not, eval_toPolyDivides, map_mul,
+    QuantFreeFormula.eval_and, eval_toQuantFreeFormula, eval_toPolyEqZero, eval_toPolyNeZero, ne_eq,
+    Set.ext_iff, Set.mem_union, Set.mem_compl_iff, Set.mem_setOf_eq, Set.mem_inter_iff]
+  intro x
+  simp only [eval_cons_eq_toPoly_eval, Polynomial.key_exists, ← toPoly_deriv,
+    elimConstantPolys]
+  rfl
 
 end Ands
