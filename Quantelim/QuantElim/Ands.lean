@@ -1,4 +1,6 @@
 import QuantElim.Poly.Zeros
+import QuantElim.QuantElim.QuantFreeFormula
+import Mathlib.Data.LazyList.Basic
 
 variable {n : ℕ}
 
@@ -8,32 +10,57 @@ structure Ands (n : ℕ) : Type where
   (neq : Poly n)
   deriving DecidableEq
 
-def Ands.eval {n : ℕ} (φ : Ands n) : Set (Fin n → ℂ) :=
-  { x | (∀ p ∈ φ.eqs, p.eval x = 0) ∧ (φ.neq.eval x ≠ 0) }
-
-def Ands.sumDegs (φ : Ands n) : ℕ :=
-  List.sum <| φ.eqs.map Poly.natDegree
-
--- none is `True`, false is `some []`
-structure QuantFreeFormula (n : ℕ) where
-  toList : Option (List (Ands n))
-
-def QuantFreeFormula.eval {n : ℕ} (φ : QuantFreeFormula n) : Set (Fin n → ℂ) :=
-  { x | ∀ l ∈ φ.toList, ∃ a ∈ l, x ∈ Ands.eval a }
-
 namespace Ands
 
-open Poly QuantFreeFormula
+def eval {n : ℕ} (φ : Ands n) : Set (Fin n → ℂ) :=
+  { x | (∀ p ∈ φ.eqs, p.eval x = 0) ∧ (φ.neq.eval x ≠ 0) }
+
+def sumDegs (φ : Ands n) : ℕ :=
+  List.sum <| φ.eqs.map Poly.natDegree
 
 def and (φ ψ : Ands n) : Ands n :=
   { eqs := φ.eqs ++ ψ.eqs,
     neq := lcm φ.neq ψ.neq }
 
+@[simp]
 def eval_and (φ ψ : Ands n) :
     (φ.and ψ).eval = φ.eval ∩ ψ.eval := by
   ext x
   simp [eval, and, forall_and, or_imp]
   tauto
+
+protected def true (n : ℕ) : Ands n :=
+  { eqs := [],
+    neq := 1 }
+
+@[simp]
+theorem eval_true : (Ands.true n).eval = Set.univ := by
+  simp [eval, Ands.true]
+
+protected def false (n : ℕ) : Ands n :=
+  { eqs := [],
+    neq := 0 }
+
+@[simp]
+theorem eval_false : (Ands.false n).eval = ∅ := by
+  simp [eval, Ands.false]
+
+open Poly QuantFreeFormula
+
+def toQuantFreeFormula (φ : Ands n) : QuantFreeFormula n :=
+  (φ.eqs.foldr (fun p ψ => (eqZero p).and ψ) true).and (neZero φ.neq)
+
+@[simp]
+theorem eval_toQuantFreeFormula (φ : Ands n) :
+    φ.toQuantFreeFormula.eval = φ.eval := by
+  rcases φ with ⟨eqs, neq⟩
+  ext x
+  simp only [QuantFreeFormula.eval, ne_eq, Set.mem_inter_iff, Set.mem_setOf_eq, eval,
+    and_congr_left_iff]
+  intro h
+  induction eqs with
+  | nil => simp
+  | cons p ps ih => simp [ih]
 
 def reduceWith (φ : Ands (n+1)) (i : Fin φ.eqs.length) : Ands (n + 1) where
   eqs := φ.eqs.mapIdx (fun j p => if i = j then p else pMod p (φ.eqs[i]))
@@ -188,5 +215,81 @@ theorem eval_reduceWithCaseSplit {n : ℕ} (φ : Ands (n+1)) (i : Fin φ.eqs.len
       mem_eraseLeadAt h, and_true, false_or]
   · simp only [Set.mem_union, Set.mem_inter_iff, mem_reduceWith h, Set.mem_setOf_eq, h,
       not_false_eq_true, and_true, and_false, or_false]
+
+def toPolyEqZero (p : Poly (n+1)) : Ands n where
+  eqs := (List.range (p.natDegree+1)).map p.coeff
+  neq := 1
+
+@[simp]
+theorem eval_toPolyEqZero : ∀ (p : Poly (n+1)), (toPolyEqZero p).eval =
+    { x | toPoly ℂ x p = 0 } := fun p => by
+  simp only [toPolyEqZero, eval, List.forall_mem_map, List.mem_range, map_one,
+    ne_eq, one_ne_zero, not_false_eq_true, and_true]
+  simp only [Nat.lt_add_one_iff, Set.ext_iff, Set.mem_setOf_eq, Polynomial.ext_iff,
+    Polynomial.coeff_zero]
+  intro x
+  refine ⟨?_, ?_⟩
+  · intro h i
+    by_cases hi : i ≤ p.natDegree
+    · rw [toPoly_coeff]
+      rw [h i hi]
+    · apply Polynomial.coeff_eq_zero_of_natDegree_lt
+      refine lt_of_le_of_lt (natDegree_toPoly_le) (lt_of_not_le hi)
+  · intro h i _
+    simp only [toPoly_coeff] at h
+    exact h i
+
+def toPolyNeZero (p : Poly (n+1)) : QuantFreeFormula n :=
+  iOrs (List.range (p.natDegree+1)) (fun i => neZero (p.coeff i))
+
+@[simp]
+theorem eval_toPolyNeZero (p : Poly (n+1)) : (toPolyNeZero p).eval =
+    { x | toPoly ℂ x p ≠ 0 } := by
+  simp [toPolyNeZero, Set.ext_iff]
+  intro x
+  rw [← not_iff_not]; simp only [not_exists, not_and, Decidable.not_not]
+  simp only [Nat.lt_add_one_iff, Set.ext_iff, Set.mem_setOf_eq, Polynomial.ext_iff,
+    Polynomial.coeff_zero]
+  refine ⟨?_, ?_⟩
+  · intro h i
+    by_cases hi : i ≤ p.natDegree
+    · rw [toPoly_coeff]
+      rw [h i hi]
+    · apply Polynomial.coeff_eq_zero_of_natDegree_lt
+      refine lt_of_le_of_lt (natDegree_toPoly_le) (lt_of_not_le hi)
+  · intro h i _
+    simp only [toPoly_coeff] at h
+    exact h i
+
+def toPolyDivides : ∀ (p _q : Poly (n+1)), QuantFreeFormula n := fun p q =>
+  if hp0 : p = 0 then (toPolyEqZero q).toQuantFreeFormula
+  else have : degree p.eraseLead < p.degree := degree_eraseLead_lt hp0
+      ((toPolyEqZero (pMod q p)).insertNeq p.leadingCoeff).toQuantFreeFormula.or
+      ((toPolyDivides (p.eraseLead) q).and (toPolyEqZero (const p.leadingCoeff)).toQuantFreeFormula)
+  termination_by p => p.degree
+
+theorem eval_toPolyDivides : ∀ (p q : Poly (n+1)),
+    (toPolyDivides p q).eval = { x | toPoly ℂ x p ∣ toPoly ℂ x q } := fun p q =>
+  if hp0 : p = 0 then by rw [toPolyDivides]; simp [hp0]
+  else by
+    have : degree p.eraseLead < p.degree := degree_eraseLead_lt hp0
+    have ih := eval_toPolyDivides (p.eraseLead) q
+    rw [toPolyDivides, dite_cond_eq_false (eq_false_intro hp0)]
+    dsimp only
+    rw [QuantFreeFormula.eval, QuantFreeFormula.eval,
+      eval_toQuantFreeFormula, eval_insertNeq,
+      eval_toQuantFreeFormula, eval_toPolyEqZero, ih]
+    ext x
+    by_cases hpl : p.leadingCoeff.eval x = 0
+    · simp [hpl, eraseLead]
+    · simp [hpl, toPoly_pMod_eq_zero_iff hpl]
+  termination_by p => p.degree
+
+/-- Elimates a Quantifier from formulas where exactly one polynomial in `φ.eqs` has positive degree -/
+def elimDegreesEqZero (φ : Ands (n+1)) (i : Fin φ.eqs.length) : QuantFreeFormula n :=
+  let p := φ.eqs.get i
+  let dp := (φ.eqs.get i).deriv
+  (toPolyDivides p (dp * φ.neq)).not.or ((toPolyEqZero p).toQuantFreeFormula.and (toPolyNeZero dp))
+
 
 end Ands
