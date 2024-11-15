@@ -226,6 +226,12 @@ theorem sumDegs_reduceWithCaseSplit_fst {n : ℕ} {φ : Ands (n+1)} {i : Fin φ.
   rcases h with ⟨j, hij, h₂⟩
   exact sumDegs_reduceWith hij h₁ h₂
 
+theorem sumDegs_reduceWithCaseSplit_snd {n : ℕ} {φ : Ands (n+1)} {i : Fin φ.eqs.length}
+    (h₁ : 0 < (φ.eqs[i]).degree) :
+    (reduceWithCaseSplit φ i).2.sumDegs < φ.sumDegs := by
+  simp only [reduceWithCaseSplit, List.get_eq_getElem, sumDegs_insertEq, natDegree_const, add_zero]
+  exact sumDegs_eraseLeadAt h₁
+
 def toPolyEqZero (p : Poly (n+1)) : Ands n where
   eqs := (List.range (p.natDegree+1)).map p.coeff
   neq := 1
@@ -392,36 +398,67 @@ theorem eval_elimZeroDegrees (φ : Ands (n+1)) (h : ∀ p ∈ φ.eqs, p.degree �
       simp_all
     · intro h; simp_all
 
-def sort (φ : Ands n) : Ands n :=
-  { eqs := φ.eqs.insertionSort (fun p q => 0 < p.degree ∧ p.degree ≤ q.degree)
-    neq := φ.neq }
+inductive Idxs (φ : Ands n) : Type
+  | none : (∀ p ∈ φ.eqs, p.degree ≤ 0) → Idxs φ
+  | one : (i : Fin φ.eqs.length) → 0 < (φ.eqs[i]).degree → (∀ j ≠ i, (φ.eqs[j]).degree ≤ 0) → Idxs φ
+  | two : (i j : Fin φ.eqs.length) → (hij : i ≠ j) → 0 < (φ.eqs[i]).degree → (φ.eqs[i]).degree ≤ (φ.eqs[j]).degree → Idxs φ
 
-@[simp]
-theorem eval_sort (φ : Ands n) : (sort φ).eval = φ.eval := by
-  simp [eval, sort]
+def getIdxs (φ : Ands n) : Idxs φ := by
+  rcases φ with ⟨eqs, neq⟩
+  induction eqs with
+  | nil => exact Idxs.none (by simp)
+  | cons p eqs ih =>
+    by_cases h : p.degree ≤ 0
+    · match ih with
+      | Idxs.none h => exact Idxs.none (by simp_all)
+      | Idxs.one i h₁ h₂ =>
+        refine Idxs.one i.succ h₁ ?_
+        intro j hj
+        simp at h₂ ⊢
+        induction j using Fin.cases with
+        | zero => simpa
+        | succ j => simpa using h₂ j (mt (congr_arg _) hj)
+      | Idxs.two i j hij h₁ h₂ =>
+        refine Idxs.two i.succ j.succ (by simpa) h₁ h₂
+    · rw [not_le] at h
+      match ih with
+      | Idxs.none h1 =>
+        refine Idxs.one (by dsimp; exact 0) (by simpa) ?_
+        intro j hj
+        induction j using Fin.cases with
+        | zero => simp_all
+        | succ j => simp; exact h1 _ (by simp)
+      | Idxs.one i h₁ h₂ =>
+        simp at *
+        by_cases hij : degree (eqs[i]) ≤ degree p
+        · refine Idxs.two i.succ (by dsimp; exact 0) (by simp [Fin.succ_ne_zero]) h₁ (by simpa)
+        · refine Idxs.two (by dsimp; exact 0) i.succ (Ne.symm (Fin.succ_ne_zero _))
+            (by simpa) (le_of_not_le (by simpa using hij))
+      | Idxs.two i j hij h₁ h₂ =>
+        simp at *
+        by_cases hij : degree (eqs[i]) ≤ degree p
+        · refine Idxs.two i.succ (by dsimp; exact 0) (Fin.succ_ne_zero _) h₁ (by simpa)
+        · refine Idxs.two (by dsimp; exact 0) i.succ (Fin.succ_ne_zero _).symm
+            (by simpa) (le_of_not_le (by simpa using hij))
+
+open Idxs
 
 def elimQuant : ∀ (φ : Ands (n+1)),
   { ψ : QuantFreeFormula n // ψ.eval = { x | ∃ y : ℂ, (Fin.cons y x) ∈ φ.eval } } := fun φ =>
-  let φ' := φ.sort
-  match h : List.findIdx? (fun p => 0 < p.degree) φ.eqs with
-  | none => ⟨elimZeroDegrees φ, by
+  match getIdxs φ with
+  | Idxs.none h => ⟨elimZeroDegrees φ, by
     rw [eval_elimZeroDegrees]
     simpa using h⟩
-  | some i =>
-    match h0 : List.all (List.eraseIdx φ.eqs i) (fun p => p.degree ≤ 0)  with
-    | true => ⟨elimOneNonZeroDegree φ ⟨i, (List.findIdx?_eq_some_iff_getElem.1 h).fst⟩, by
-      rw [eval_elimOneNonZeroDegree]
-      intro j hj
-      rw [List.findIdx?_eq_some_iff_getElem] at h
-      simp only [decide_eq_true_eq, not_lt] at h
-      simp at h0
-      refine h0 _ ?_
-      simp [List.mem_eraseIdx_iff_getElem]
-      use j; use Fin.val_ne_of_ne hj; simp_all⟩
-    | false =>
-      let ψ := reduceWithCaseSplit φ ⟨i, (List.findIdx?_eq_some_iff_getElem.1 h).fst⟩
-      have
-      (elimQuant ψ.1).or (elimQuant ψ.2)
+  | Idxs.one i h₁ h₂ => ⟨elimOneNonZeroDegree φ i, by rw [eval_elimOneNonZeroDegree h₂]⟩
+  | Idxs.two i j hij h₁ h₂ =>
+    let ψ := reduceWithCaseSplit φ i
+    have wf₁ := sumDegs_reduceWithCaseSplit_fst ⟨j, hij, h₂⟩ h₁
+    have wf₂ := sumDegs_reduceWithCaseSplit_snd h₁
+    ⟨(elimQuant ψ.1).1.or (elimQuant ψ.2).1, by
+      rw [QuantFreeFormula.eval_or, (elimQuant ψ.1).2, (elimQuant ψ.2).2]
+      ext x
+      conv_rhs => rw [← eval_reduceWithCaseSplit φ i]
+      simp [ψ, exists_or]⟩
   termination_by φ => sumDegs φ
 
 
