@@ -1,6 +1,5 @@
 import QuantElim.Poly.Zeros
-import QuantElim.QuantElim.QuantFreeFormula
-import Mathlib.Data.LazyList.Basic
+import QuantElim.QuantFreeFormula.Basic
 import QuantElim.forMathlib
 
 variable {n : ℕ}
