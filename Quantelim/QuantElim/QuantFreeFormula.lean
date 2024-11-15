@@ -107,6 +107,20 @@ theorem eval_iAnds {α : Type*} (l : List α) (f : α → QuantFreeFormula n) :
     simp [iAnds, eval, ih, Set.ext_iff] at *
     simp [ih]
 
+def neZero (p : Poly n) : QuantFreeFormula n := ite p fals tru
+
+@[simp]
+theorem eval_neZero (p : Poly n) : eval (neZero p) = {x | p.eval x ≠ 0} := by
+  ext x
+  simp [eval, neZero]
+
+def eqZero (p : Poly n) : QuantFreeFormula n := ite p tru fals
+
+@[simp]
+theorem eval_eqZero (p : Poly n) : eval (eqZero p) = {x | p.eval x = 0} := by
+  ext x
+  simp [eval, eqZero]
+
 open Poly
 
 instance decidableEvalZero (x : Fin 0 → ℂ) : ∀ (φ : QuantFreeFormula 0), Decidable (x ∈ φ.eval)
@@ -118,6 +132,6 @@ instance decidableEvalZero (x : Fin 0 → ℂ) : ∀ (φ : QuantFreeFormula 0), 
       decidable_of_iff ((if toInt p = 0 then x ∈ φ.eval else x ∈ ψ.eval) = true)
         (by
           rcases p with ⟨⟨_⟩, _⟩
-          split_ifs <;> simp[Poly.eval, toInt, *] <;> tauto)
+          split_ifs <;> simp [Poly.eval, toInt, *] <;> tauto)
 
 end QuantFreeFormula

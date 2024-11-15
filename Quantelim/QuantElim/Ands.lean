@@ -276,20 +276,78 @@ theorem eval_toPolyDivides : ∀ (p q : Poly (n+1)),
     have ih := eval_toPolyDivides (p.eraseLead) q
     rw [toPolyDivides, dite_cond_eq_false (eq_false_intro hp0)]
     dsimp only
-    rw [QuantFreeFormula.eval, QuantFreeFormula.eval,
-      eval_toQuantFreeFormula, eval_insertNeq,
-      eval_toQuantFreeFormula, eval_toPolyEqZero, ih]
+    simp [ih]
     ext x
     by_cases hpl : p.leadingCoeff.eval x = 0
     · simp [hpl, eraseLead]
     · simp [hpl, toPoly_pMod_eq_zero_iff hpl]
   termination_by p => p.degree
 
+def elimConstantPolys (φ : Ands (n+1)) (i : Fin φ.eqs.length) : QuantFreeFormula n × Poly (n+1) × Poly (n+1) :=
+  (QuantFreeFormula.iAnds (List.finRange φ.eqs.length)
+    fun j => if j = i then tru else eqZero ((φ.eqs[j]).eval (Fin.cases 0 Poly.X)), φ.eqs[i], φ.neq)
+
+@[simp]
+theorem eval_elimConstantPolys (φ : Ands (n+1)) (i : Fin φ.eqs.length)
+    (h : ∀ j ≠ i, (φ.eqs.get j).degree ≤ 0) :
+    let (ψ, p, q) := elimConstantPolys φ i
+    {x | ∃ y : ℂ, (Fin.cons y x) ∈ φ.eval } = ψ.eval ∩ { x | ∃ y : ℂ, p.eval (Fin.cons y x) = 0 ∧
+      q.eval (Fin.cons y x) ≠ 0 } := by
+  rcases φ with ⟨eqs, neq⟩
+  simp only [elimConstantPolys, Fin.getElem_fin, eval_iAnds, List.mem_map, QuantFreeFormula.eval,
+    Set.inter_univ, ne_eq, Set.inter_empty, Set.union_empty, Set.iInter_exists, Set.biInter_and',
+    Set.iInter_iInter_eq_right, Set.ext_iff, Set.mem_setOf_eq, Set.mem_inter_iff, Set.mem_iInter]
+  simp only [eval, ne_eq, Set.mem_setOf_eq]
+  intro x
+  refine ⟨?_, ?_⟩
+  · rintro ⟨y, hy⟩
+    refine ⟨?_, ⟨y, ?_⟩⟩
+    · intro j _
+      split_ifs with hij; simp
+      simp only [QuantFreeFormula.eval, Set.inter_univ, ne_eq, Set.inter_empty, Set.union_empty,
+        Set.mem_setOf_eq]
+      rcases degree_le_zero_iff.1 (h j hij) with ⟨c, hc⟩
+      simp only [List.get_eq_getElem] at hc
+      erw [hc, eval_const, apply_eval, ← hy.1 (eqs[j]) (by simp), hc, eval_const]
+      congr; ext k
+      simp
+    · refine ⟨?_, hy.2⟩
+      erw [hy.1 (eqs[i]) (by simp)]
+  · rintro ⟨h0, y, hy⟩
+    use y
+    refine ⟨?_, hy.2⟩
+    intro p hp
+    have := h0 ⟨List.indexOf p eqs, List.indexOf_lt_length.2 hp⟩ (by simp)
+    split_ifs at this with hi
+    · subst hi
+      simp only [List.getElem_indexOf] at hy
+      exact hy.1
+    · simp at this
+      rcases degree_le_zero_iff.1 (h _ hi) with ⟨c, hc⟩
+      simp only [List.get_eq_getElem, List.getElem_indexOf] at hc
+      subst hc
+      rw [← this]
+      simp [apply_eval]
+
 /-- Elimates a Quantifier from formulas where exactly one polynomial in `φ.eqs` has positive degree -/
 def elimDegreesEqZero (φ : Ands (n+1)) (i : Fin φ.eqs.length) : QuantFreeFormula n :=
   let p := φ.eqs.get i
   let dp := (φ.eqs.get i).deriv
+  let φ' : List (Poly n) := (φ.eqs.eraseIdx i).map (fun p => p.eval (Fin.cases 0 Poly.X))
+  (QuantFreeFormula.iAnds φ' eqZero).and <|
   (toPolyDivides p (dp * φ.neq)).not.or ((toPolyEqZero p).toQuantFreeFormula.and (toPolyNeZero dp))
+
+theorem eval_elimDegreesEqZero {φ : Ands (n+1)} {i : Fin φ.eqs.length}
+    (h : ∀ j ≠ i, (φ.eqs.get j).degree ≤ 0) :
+    (elimDegreesEqZero φ i).eval = {x | ∃ y : ℂ, φ.eval (Fin.cons y x) } := by
+  ext x
+  rcases φ with ⟨eqs, neq⟩
+  simp [elimDegreesEqZero, List.get_eq_getElem, QuantFreeFormula.eval_and, eval_iAnds,
+    List.mem_map, QuantFreeFormula.eval, Set.inter_univ, ne_eq, Set.inter_empty, Set.union_empty,
+    Set.iInter_exists, Set.biInter_and', Set.iInter_iInter_eq_right, eval_or, eval_not,
+    eval_toQuantFreeFormula, eval_toPolyEqZero, eval_toPolyNeZero, Set.mem_inter_iff,
+    Set.mem_iInter, Set.mem_setOf_eq, Set.mem_union, Set.mem_compl_iff]
+
 
 
 end Ands
