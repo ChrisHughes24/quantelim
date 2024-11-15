@@ -218,6 +218,14 @@ theorem eval_reduceWithCaseSplit {n : ℕ} (φ : Ands (n+1)) (i : Fin φ.eqs.len
   · simp only [Set.mem_union, Set.mem_inter_iff, mem_reduceWith h, Set.mem_setOf_eq, h,
       not_false_eq_true, and_true, and_false, or_false]
 
+theorem sumDegs_reduceWithCaseSplit_fst {n : ℕ} {φ : Ands (n+1)} {i : Fin φ.eqs.length}
+    (h : ∃ j, i ≠ j ∧ (φ.eqs[i]).degree ≤ (φ.eqs[j]).degree)
+    (h₁ : 0 < (φ.eqs[i]).degree) :
+    (reduceWithCaseSplit φ i).1.sumDegs < φ.sumDegs := by
+  simp only [reduceWithCaseSplit, sumDegs_insertNeq]
+  rcases h with ⟨j, hij, h₂⟩
+  exact sumDegs_reduceWith hij h₁ h₂
+
 def toPolyEqZero (p : Poly (n+1)) : Ands n where
   eqs := (List.range (p.natDegree+1)).map p.coeff
   neq := 1
@@ -332,18 +340,18 @@ theorem eval_elimConstantPolys (φ : Ands (n+1)) (i : Fin φ.eqs.length)
       simp [apply_eval]
 
 /-- Elimates a Quantifier from formulas where exactly one polynomial in `φ.eqs` has positive degree -/
-def elimDegreesEqZero (φ : Ands (n+1)) (i : Fin φ.eqs.length) : QuantFreeFormula n :=
+def elimOneNonZeroDegree (φ : Ands (n+1)) (i : Fin φ.eqs.length) : QuantFreeFormula n :=
   let p := φ.eqs.get i
   let dp := (φ.eqs.get i).deriv
   (elimConstantPolys φ i).1.and <|
   (toPolyDivides p (dp * φ.neq)).not.or ((toPolyEqZero p).toQuantFreeFormula.and (toPolyNeZero φ.neq))
 
-theorem eval_elimDegreesEqZero {φ : Ands (n+1)} {i : Fin φ.eqs.length}
+theorem eval_elimOneNonZeroDegree {φ : Ands (n+1)} {i : Fin φ.eqs.length}
     (h : ∀ j ≠ i, (φ.eqs.get j).degree ≤ 0) :
-    (elimDegreesEqZero φ i).eval = {x | ∃ y : ℂ,  (Fin.cons y x) ∈ φ.eval } := by
+    (elimOneNonZeroDegree φ i).eval = {x | ∃ y : ℂ, (Fin.cons y x) ∈ φ.eval } := by
   have := eval_elimConstantPolys φ i h
   dsimp only at this
-  rw [this, elimDegreesEqZero, QuantFreeFormula.eval_and]; clear this
+  rw [this, elimOneNonZeroDegree, QuantFreeFormula.eval_and]; clear this
   congr
   simp only [List.get_eq_getElem, eval_or, eval_not, eval_toPolyDivides, map_mul,
     QuantFreeFormula.eval_and, eval_toQuantFreeFormula, eval_toPolyEqZero, eval_toPolyNeZero, ne_eq,
@@ -352,5 +360,69 @@ theorem eval_elimDegreesEqZero {φ : Ands (n+1)} {i : Fin φ.eqs.length}
   simp only [eval_cons_eq_toPoly_eval, Polynomial.key_exists, ← toPoly_deriv,
     elimConstantPolys]
   rfl
+
+/-- Eliminate quantifiers from a formula where all the `eqs` have degree 0 -/
+def elimZeroDegrees (φ : Ands (n+1)) : QuantFreeFormula n :=
+    (iAnds φ.eqs (fun i => (toPolyEqZero i).toQuantFreeFormula)).and (toPolyNeZero φ.neq)
+
+theorem eval_elimZeroDegrees (φ : Ands (n+1)) (h : ∀ p ∈ φ.eqs, p.degree ≤ 0) :
+    (elimZeroDegrees φ).eval = { x | ∃ y : ℂ, (Fin.cons y x) ∈ φ.eval } := by
+  rcases φ with ⟨eqs, neq⟩
+  simp only [elimZeroDegrees, QuantFreeFormula.eval_and, eval_iAnds, eval_toQuantFreeFormula,
+    eval_toPolyEqZero, eval_toPolyNeZero, ne_eq, Set.ext_iff, Set.mem_inter_iff, Set.mem_iInter,
+    Set.mem_setOf_eq]
+  simp only at h
+  simp only [eval, ne_eq, Set.mem_setOf_eq, eval_cons_eq_toPoly_eval]
+  intro x
+  refine ⟨?_, ?_⟩
+  · intro h1
+    rcases Finset.exists_not_mem ((toPoly ℂ x) neq).roots.toFinset with ⟨y, hy⟩
+    use y
+    simp only [Multiset.mem_toFinset, Polynomial.mem_roots', ne_eq, Polynomial.IsRoot.def,
+      not_and] at hy
+    simp only [hy h1.2, not_false_iff, and_true]
+    intro p hp
+    rw [h1.1 p hp, Polynomial.eval_zero]
+  · rintro ⟨y, hy⟩
+    refine ⟨?_, ?_⟩
+    · intro p hp
+      rcases degree_le_zero_iff.1 (h p hp) with ⟨c, hc⟩
+      have := hy.1 p hp
+      subst hc
+      simp_all
+    · intro h; simp_all
+
+def sort (φ : Ands n) : Ands n :=
+  { eqs := φ.eqs.insertionSort (fun p q => 0 < p.degree ∧ p.degree ≤ q.degree)
+    neq := φ.neq }
+
+@[simp]
+theorem eval_sort (φ : Ands n) : (sort φ).eval = φ.eval := by
+  simp [eval, sort]
+
+def elimQuant : ∀ (φ : Ands (n+1)),
+  { ψ : QuantFreeFormula n // ψ.eval = { x | ∃ y : ℂ, (Fin.cons y x) ∈ φ.eval } } := fun φ =>
+  let φ' := φ.sort
+  match h : List.findIdx? (fun p => 0 < p.degree) φ.eqs with
+  | none => ⟨elimZeroDegrees φ, by
+    rw [eval_elimZeroDegrees]
+    simpa using h⟩
+  | some i =>
+    match h0 : List.all (List.eraseIdx φ.eqs i) (fun p => p.degree ≤ 0)  with
+    | true => ⟨elimOneNonZeroDegree φ ⟨i, (List.findIdx?_eq_some_iff_getElem.1 h).fst⟩, by
+      rw [eval_elimOneNonZeroDegree]
+      intro j hj
+      rw [List.findIdx?_eq_some_iff_getElem] at h
+      simp only [decide_eq_true_eq, not_lt] at h
+      simp at h0
+      refine h0 _ ?_
+      simp [List.mem_eraseIdx_iff_getElem]
+      use j; use Fin.val_ne_of_ne hj; simp_all⟩
+    | false =>
+      let ψ := reduceWithCaseSplit φ ⟨i, (List.findIdx?_eq_some_iff_getElem.1 h).fst⟩
+      have
+      (elimQuant ψ.1).or (elimQuant ψ.2)
+  termination_by φ => sumDegs φ
+
 
 end Ands
