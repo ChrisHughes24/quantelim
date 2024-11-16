@@ -30,7 +30,7 @@ theorem eval_pMod_eq_zero_iff {q : Poly (n+1)} {x : Fin (n+1) → R}
   simp only [pow_eq_zero_iff', hl, ne_eq, false_and, false_or]
 
 omit dom in
-theorem eval_pMod_eq_zero_iff {p q : Poly (n+1)} {x : Fin (n+1) → R}
+theorem eval_pMod_eq_zero {p q : Poly (n+1)} {x : Fin (n+1) → R}
     (hq : eval x q = 0) (hx0 : p.eval x = 0) : (pMod p q).eval x = 0 := by
   rw [pMod_eq_sub p q, map_sub, map_mul, map_mul, hx0, hq]; simp
 
