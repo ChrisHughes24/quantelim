@@ -15,8 +15,8 @@ namespace Ands
 def eval {n : ℕ} (φ : Ands n) : Set (Fin n → ℂ) :=
   { x | (∀ p ∈ φ.eqs, p.eval x = 0) ∧ (φ.neq.eval x ≠ 0) }
 
-noncomputable def minDeg (φ : Ands n) : WithBot ℕ :=
-  ⨅ (i : Fin φ.eqs.length) (hi : 0 < (φ.eqs[i]).degree), (φ.eqs[i]).degree
+def sumDegs (φ : Ands n) : ℕ :=
+  List.sum <| φ.eqs.map Poly.natDegree
 
 def and (φ ψ : Ands n) : Ands n :=
   { eqs := φ.eqs ++ ψ.eqs,
@@ -83,7 +83,7 @@ theorem mem_reduceWith {φ : Ands (n+1)} {i : Fin φ.eqs.length}
     replace h := h.1 j hj
     split_ifs at h
     · assumption
-    · rwa [eval_pMod_eq_zero_iff hx this] at h
+    · rwa [eval_pMod_eq_zero hx this] at h
   · intro h
     have := h.1 i i.prop
     simp only [↓reduceIte] at this
@@ -92,46 +92,31 @@ theorem mem_reduceWith {φ : Ands (n+1)} {i : Fin φ.eqs.length}
     replace h := h.1 j hj
     split_ifs
     · assumption
-    · rwa [eval_pMod_eq_zero_iff hx this]
+    · rwa [eval_pMod_eq_zero hx this]
 
-def reduceAndInclude (φ : Ands (n+1)) (i j : Fin φ.eqs.length) : Ands (n+1) where
-  eqs := pMod (φ.eqs[j]) (φ.eqs[i]) :: φ.eqs
-  neq := φ.neq
-
-theorem eval_reduceAndInclude {φ : Ands (n+1)} {i j : Fin φ.eqs.length}
-    (hi0 : 0 < (φ.eqs[i]).degree)
-    (hij : (φ.eqs[i]).degree ≤ (φ.eqs[j]).degree) :
-    (φ.reduceAndInclude i j).eval = φ.eval := by
-  rcases φ with ⟨eqs, neq⟩
-  ext x
-  simp only [eval, reduceAndInclude, Fin.getElem_fin, List.mem_cons, forall_eq_or_imp, ne_eq,
-    Set.mem_setOf_eq, and_congr_left_iff, and_iff_right_iff_imp]
-  rw [eval_pMod_eq_zero_iff]
-
-
-theorem minDeg_le_of_forall_le {φ ψ : Ands n}
+theorem sumDegs_le_of_forall_le {φ ψ : Ands n}
     (h₁ : φ.eqs.length = ψ.eqs.length)
     (h : ∀ i : Fin φ.eqs.length, (φ.eqs[i]).natDegree ≤ (ψ.eqs[i]).natDegree) :
-    φ.minDeg ≤ ψ.minDeg := by
-  unfold minDeg
+    φ.sumDegs ≤ ψ.sumDegs := by
+  unfold sumDegs
   rw [← Fin.sum_univ_get', ← Fin.sum_univ_get', ← Fin.sum_congr' _ h₁]
   exact Finset.sum_le_sum fun i hi => h i
 
-theorem minDeg_lt_of_forall_le_of_lt {φ ψ : Ands n}
+theorem sumDegs_lt_of_forall_le_of_lt {φ ψ : Ands n}
     (h₁ : φ.eqs.length = ψ.eqs.length)
     (h : ∀ i : Fin φ.eqs.length, (φ.eqs[i]).natDegree ≤ (ψ.eqs[i]).natDegree)
     (h₂ : ∃ i : Fin φ.eqs.length, (φ.eqs[i]).natDegree < (ψ.eqs[i]).natDegree) :
-    φ.minDeg < ψ.minDeg := by
-  unfold minDeg
+    φ.sumDegs < ψ.sumDegs := by
+  unfold sumDegs
   rw [← Fin.sum_univ_get', ← Fin.sum_univ_get', ← Fin.sum_congr' _ h₁]
   exact Finset.sum_lt_sum (fun i hi => h i) (by simpa)
 
-theorem minDeg_reduceWith {φ : Ands (n+1)} {i j : Fin φ.eqs.length}
+theorem sumDegs_reduceWith {φ : Ands (n+1)} {i j : Fin φ.eqs.length}
     (hij : i ≠ j)
     (h₁ : 0 < (φ.eqs[i]).degree)
     (h₂ : (φ.eqs[i]).degree ≤ (φ.eqs[j]).degree) :
-    (φ.reduceWith i).minDeg < φ.minDeg := by
-  refine minDeg_lt_of_forall_le_of_lt ?_ ?_ ?_
+    (φ.reduceWith i).sumDegs < φ.sumDegs := by
+  refine sumDegs_lt_of_forall_le_of_lt ?_ ?_ ?_
   · simp [reduceWith]
   · intro k
     dsimp [reduceWith]
@@ -165,11 +150,11 @@ theorem mem_eraseLeadAt {φ : Ands (n+1)} {i : Fin φ.eqs.length}
     simp [eraseLead, map_sub, map_mul, eval_const, map_pow, eval_X, hx]
   · rfl
 
-theorem minDeg_eraseLeadAt {φ : Ands (n+1)} {i : Fin φ.eqs.length}
+theorem sumDegs_eraseLeadAt {φ : Ands (n+1)} {i : Fin φ.eqs.length}
     (h : 0 < (φ.eqs[i]).degree) :
-    (φ.eraseLeadAt i).minDeg < φ.minDeg := by
+    (φ.eraseLeadAt i).sumDegs < φ.sumDegs := by
   have h0 : (φ.eqs[i]) ≠ 0 := by intro h; simp_all
-  refine minDeg_lt_of_forall_le_of_lt ?_ ?_ ?_
+  refine sumDegs_lt_of_forall_le_of_lt ?_ ?_ ?_
   · simp [eraseLeadAt]
   · intro j
     simp only [eraseLeadAt]
@@ -191,8 +176,8 @@ def insertEq (φ : Ands n) (p : Poly n) : Ands n :=
     neq := φ.neq }
 
 @[simp]
-theorem minDeg_insertEq (φ : Ands n) (p : Poly n) : (φ.insertEq p).minDeg = φ.minDeg + p.natDegree := by
-  simp [minDeg, insertEq, add_comm]
+theorem sumDegs_insertEq (φ : Ands n) (p : Poly n) : (φ.insertEq p).sumDegs = φ.sumDegs + p.natDegree := by
+  simp [sumDegs, insertEq, add_comm]
 
 @[simp]
 theorem eval_insertEq (φ : Ands n) (p : Poly n) :
@@ -205,7 +190,7 @@ def insertNeq (φ : Ands n) (p : Poly n) : Ands n :=
     neq := lcm φ.neq p }
 
 @[simp]
-theorem minDeg_insertNeq (φ : Ands n) (p : Poly n) : (φ.insertNeq p).minDeg = φ.minDeg := rfl
+theorem sumDegs_insertNeq (φ : Ands n) (p : Poly n) : (φ.insertNeq p).sumDegs = φ.sumDegs := rfl
 
 @[simp]
 theorem eval_insertNeq (φ : Ands n) (p : Poly n) :
@@ -232,19 +217,19 @@ theorem eval_reduceWithCaseSplit {n : ℕ} (φ : Ands (n+1)) (i : Fin φ.eqs.len
   · simp only [Set.mem_union, Set.mem_inter_iff, mem_reduceWith h, Set.mem_setOf_eq, h,
       not_false_eq_true, and_true, and_false, or_false]
 
-theorem minDeg_reduceWithCaseSplit_fst {n : ℕ} {φ : Ands (n+1)} {i : Fin φ.eqs.length}
+theorem sumDegs_reduceWithCaseSplit_fst {n : ℕ} {φ : Ands (n+1)} {i : Fin φ.eqs.length}
     (h : ∃ j, i ≠ j ∧ (φ.eqs[i]).degree ≤ (φ.eqs[j]).degree)
     (h₁ : 0 < (φ.eqs[i]).degree) :
-    (reduceWithCaseSplit φ i).1.minDeg < φ.minDeg := by
-  simp only [reduceWithCaseSplit, minDeg_insertNeq]
+    (reduceWithCaseSplit φ i).1.sumDegs < φ.sumDegs := by
+  simp only [reduceWithCaseSplit, sumDegs_insertNeq]
   rcases h with ⟨j, hij, h₂⟩
-  exact minDeg_reduceWith hij h₁ h₂
+  exact sumDegs_reduceWith hij h₁ h₂
 
-theorem minDeg_reduceWithCaseSplit_snd {n : ℕ} {φ : Ands (n+1)} {i : Fin φ.eqs.length}
+theorem sumDegs_reduceWithCaseSplit_snd {n : ℕ} {φ : Ands (n+1)} {i : Fin φ.eqs.length}
     (h₁ : 0 < (φ.eqs[i]).degree) :
-    (reduceWithCaseSplit φ i).2.minDeg < φ.minDeg := by
-  simp only [reduceWithCaseSplit, List.get_eq_getElem, minDeg_insertEq, natDegree_const, add_zero]
-  exact minDeg_eraseLeadAt h₁
+    (reduceWithCaseSplit φ i).2.sumDegs < φ.sumDegs := by
+  simp only [reduceWithCaseSplit, List.get_eq_getElem, sumDegs_insertEq, natDegree_const, add_zero]
+  exact sumDegs_eraseLeadAt h₁
 
 def toPolyEqZero (p : Poly (n+1)) : Ands n where
   eqs := (List.range (p.natDegree+1)).map p.coeff
@@ -466,13 +451,13 @@ def elimQuant : ∀ (φ : Ands (n+1)),
   | Idxs.one i h₁ h₂ => ⟨elimOneNonZeroDegree φ i, by rw [eval_elimOneNonZeroDegree h₂]⟩
   | Idxs.two i j hij h₁ h₂ =>
     let ψ := reduceWithCaseSplit φ i
-    have wf₁ := minDeg_reduceWithCaseSplit_fst ⟨j, hij, h₂⟩ h₁
-    have wf₂ := minDeg_reduceWithCaseSplit_snd h₁
+    have wf₁ := sumDegs_reduceWithCaseSplit_fst ⟨j, hij, h₂⟩ h₁
+    have wf₂ := sumDegs_reduceWithCaseSplit_snd h₁
     ⟨(elimQuant ψ.1).1.or (elimQuant ψ.2).1, by
       rw [QuantFreeFormula.eval_or, (elimQuant ψ.1).2, (elimQuant ψ.2).2]
       ext x
       conv_rhs => rw [← eval_reduceWithCaseSplit φ i]
       simp [ψ, exists_or]⟩
-  termination_by φ => minDeg φ
+  termination_by φ => sumDegs φ
 
 end Ands
