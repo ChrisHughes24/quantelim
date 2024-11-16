@@ -24,15 +24,6 @@ theorem Splits.dvd_iff_roots_le_roots {p q : K[X]}
   · rintro ⟨r, rfl⟩
     rw [roots_mul hq0]; exact le_add_right le_rfl
 
-theorem rootMultiplicity_derivative {R : Type*} [CommRing R] [CharZero R] [IsDomain R]
-    {p : R[X]} {t : R} (hpt : Polynomial.IsRoot p t) :
-    (derivative p).rootMultiplicity t = p.rootMultiplicity t - 1 := by
-  by_cases hp0 : p = 0
-  · simp [hp0]
-  · exact derivative_rootMultiplicity_of_root_of_mem_nonZeroDivisors hpt
-      (mem_nonZeroDivisors_iff_ne_zero.2 (Nat.cast_ne_zero.2 (Nat.ne_zero_iff_zero_lt.2
-        ((rootMultiplicity_pos hp0).2 hpt))))
-
 theorem key_one_way {R : Type*} [CommRing R] [IsDomain R] [CharZero R] {f g : R[X]} (hf0 : f ≠ 0)
     (hfd : f ∣ f.derivative * g) : ∀ x, f.eval x = 0 → g.eval x = 0 := by
   intro a haf
