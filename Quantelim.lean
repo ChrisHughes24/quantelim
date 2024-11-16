@@ -1,4 +1,5 @@
 import Quantelim.Basic
+import Quantelim.Logic.ElimQuants
 import Quantelim.Logic.Formula
 import Quantelim.Logic.Term
 import Quantelim.Poly.Basic
@@ -7,4 +8,5 @@ import Quantelim.Poly.Zeros
 import Quantelim.QuantFreeFormula.Ands
 import Quantelim.QuantFreeFormula.Basic
 import Quantelim.QuantFreeFormula.ElimQuant
+import Quantelim.QuantFreeFormula.Simplify
 import Quantelim.forMathlib
