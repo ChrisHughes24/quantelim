@@ -733,6 +733,9 @@ instance : IsDomain (Poly n) := Equiv.isDomain ringEquivMvPolyAux
 instance : UniqueFactorizationMonoid (Poly n) :=
   (MulEquiv.uniqueFactorizationMonoid_iff ringEquivMvPolyAux.toMulEquiv).2 inferInstance
 
+instance : IsNoetherianRing (Poly n) :=
+  isNoetherianRing_of_ringEquiv _ ringEquivMvPolyAux.symm
+
 instance : CharZero (Poly n) := ⟨by
   intro a b
   rw [← map_natCast ringEquivMvPolyAux.symm, ← map_natCast ringEquivMvPolyAux.symm,
