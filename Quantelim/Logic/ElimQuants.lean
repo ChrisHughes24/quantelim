@@ -47,8 +47,8 @@ instance (x : Fin 0 → ℂ) (φ : Formula 0) : Decidable (φ.eval x) := by
 open Term
 
 -- #eval
---   let φ : Formula 0 := all $ all $
---     (eq (var 0 * var 0) (var 1 * var 1)).implies (or (eq (var 0) (var 1)) (eq (var 0) (neg (var 1))))
+--   let φ : Formula 0 := ex $
+--     (eq (var 0 * var 0) (ofInt (-1)))
 --   decide (φ.eval (Fin.elim0 : Fin 0 → ℂ))
 
 end Formula

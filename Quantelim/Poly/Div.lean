@@ -379,7 +379,7 @@ def gCd : ∀ {n : ℕ} (p q : Poly n),
 
 end
 
-instance : GCDMonoid (Poly n) where
+instance gcdMonoid : GCDMonoid (Poly n) where
   gcd := fun p q => (gCd p q).1
   lcm := fun p q => p * (q / (gCd p q).1)
   gcd_dvd_left := fun p q => (gCd p q).2.1

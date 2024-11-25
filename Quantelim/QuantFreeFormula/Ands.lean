@@ -83,7 +83,7 @@ theorem mem_reduceWith {φ : Ands (n+1)} {i : Fin φ.eqs.length}
     replace h := h.1 j hj
     split_ifs at h
     · assumption
-    · rwa [eval_pMod_eq_zero hx this] at h
+    · rwa [eval_pMod_eq_zero_iff hx this] at h
   · intro h
     have := h.1 i i.prop
     simp only [↓reduceIte] at this
@@ -92,7 +92,7 @@ theorem mem_reduceWith {φ : Ands (n+1)} {i : Fin φ.eqs.length}
     replace h := h.1 j hj
     split_ifs
     · assumption
-    · rwa [eval_pMod_eq_zero hx this]
+    · rwa [eval_pMod_eq_zero_iff hx this]
 
 theorem sumDegs_le_of_forall_le {φ ψ : Ands n}
     (h₁ : φ.eqs.length = ψ.eqs.length)

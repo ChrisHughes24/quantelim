@@ -10,7 +10,7 @@ inductive QuantFreeFormula (n : ℕ) : Type
 namespace QuantFreeFormula
 
 def rel (p q : Poly n) : Prop :=
-  0 < p.degree ∧ p.degree ≤ q.degree
+  p.degree ≤ q.degree
 
 instance : DecidableRel (@rel n) := fun _ _ => by dsimp [rel]; infer_instance
 

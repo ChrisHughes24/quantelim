@@ -1,4 +1,5 @@
 import QuantElim.Poly.Div
+import QuantElim.forMathlib
 
 namespace Poly
 
@@ -19,12 +20,26 @@ theorem eval_elimSquares {R : Type*} [CommRing R] [IsDomain R] [CharZero R] : �
     split_ifs with h0
     · simp only [map_zero, true_iff, h0, Int.cast_zero]
     · simpa
-  | _+1, x, p => by
-    let c := cont p
-    let pp := p / const c
+  | n+1, x, p => by
+    rw [elimSquares]
+    generalize hc : cont p = c
+    rcases c with ⟨c, hc1⟩
+    simp
+    rcases exists_eq_mul_right_of_dvd hc1.1 with ⟨pp, hpp⟩
+    subst hpp; clear hc hc1
+    rw [eval_elimSquares, ← mul_eq_zero, ← eval_const, ← map_mul]
+    rw [Poly.mul_div_cancel]
     let d := gcd pp pp.deriv
-    have : p.eval x = 0 → (gcd pp pp.deriv).eval x = 0 := sorry
-    sorry
+    have : x = Fin.cons (x 0) (fun i => x i.succ) := by
+      ext i; induction i using Fin.cases <;> simp
+    rw [this, eval_cons_eq_toPoly_eval, eval_cons_eq_toPoly_eval]
+    let d := toPoly R (fun i : Fin n => x i.succ) d
+    rw [iff_comm]
+    by_cases hp0 : toPoly R (fun i : Fin n => x i.succ) p = 0
+    · simp [hp0]
+      have :=
+    apply Polynomial.square_free_key
+    · simp
 
-
+example 
 end Poly
