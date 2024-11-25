@@ -19,73 +19,51 @@ namespace MvPolynomial
 
 variable {σ K α : Type*} [Field K]
 
-structure MonomialOrder (σ α : Type*) [LinearOrder α] [OrderBot α] extends (σ →₀ ℕ) ↪ α,
-    OrderHom (σ →₀ ℕ) α  where
-  ( le_iff_add_le_add' {m n p} : toFun m ≤ toFun n ↔ toFun (m + p) ≤ toFun (n + p) )
-  ( toFun_zero : toFun 0 = ⊥ )
+class MonomialOrder (σ : Type*) (α : outParam (Type*)) [LinearOrder α] [OrderBot α] where
+  ( size : (σ →₀ ℕ) ↪ α )
+  ( size_monotone : Monotone size )
+  ( size_injective : Function.Injective size )
+  ( size_zero : size 0 = ⊥ )
+  ( le_iff_add_le_add' {m n p} : size m ≤ size n ↔ size (m + p) ≤ size (n + p) )
 
 namespace MonomialOrder
 
-variable [LinearOrder α] [OrderBot α] (size : MonomialOrder σ α)
+attribute [simp] size_zero
 
-instance : FunLike (MonomialOrder σ α) (σ →₀ ℕ) α where
-  coe f := f.toFun
-  coe_injective' f g h := by
-    cases f
-    cases g
-    congr
-    apply DFunLike.coe_injective'
-    exact h
-
-instance : EmbeddingLike (MonomialOrder σ α) (σ →₀ ℕ) α where
-  injective' f := f.injective
-
-instance : OrderHomClass (MonomialOrder σ α) (σ →₀ ℕ) α where
-  map_rel f {_} {_} h := f.monotone' h
-
-theorem wellFounded (size : MonomialOrder σ α) [Finite σ] :
-    WellFounded ((· < ·) on size) := by
-  have := ((Finsupp.isPWO (Set.univ : Set (σ →₀ ℕ))).image_of_monotone_on (f := size)
-    (s := Set.univ) (r' := (· ≤ ·)) (fun _ _ _ _ h => size.monotone' h)).wellFoundedOn
-  simpa [and_iff_right_of_imp le_of_lt]
-
-theorem injective : Function.Injective size := size.toEmbedding.injective
+variable [LinearOrder α] [OrderBot α] [MonomialOrder σ α]
 
 @[simp]
-theorem add_le_add_right_iff {m n p : σ →₀ ℕ} :
+theorem size_add_le_size_add_right_iff {m n p : σ →₀ ℕ} :
     size (m + p) ≤ size (n + p) ↔ size m ≤ size n :=
-  size.le_iff_add_le_add'.symm
+  le_iff_add_le_add'.symm
 
 @[simp]
-theorem add_le_add_left_iff {m n p : σ →₀ ℕ} :
+theorem size_add_le_size_add_left_iff {m n p : σ →₀ ℕ} :
     size (p + m) ≤ size (p + n) ↔ size m ≤ size n := by
-  rw [add_comm, add_comm p n, add_le_add_right_iff]
+  rw [add_comm, add_comm p n, size_add_le_size_add_right_iff]
 
 @[simp]
-theorem map_zero : size 0 = ⊥ := size.toFun_zero
-
-@[simp]
-theorem map_eq_bot_iff {p : σ →₀ ℕ} : size p = ⊥ ↔ p = 0 := by
-  rw [← map_zero, size.injective.eq_iff]
+theorem size_eq_bot_iff {m : σ →₀ ℕ} : size m = ⊥ ↔ m = 0 := by
+  refine ⟨fun h => ?_, fun h => h ▸ size_zero⟩
+  rw [← size_zero (σ := σ)] at h
+  exact size_injective h
 
 noncomputable def leadingMonomial (f : MvPolynomial σ K) : σ →₀ ℕ :=
   (f.support.toList.argmax size).getD 0
 
-protected noncomputable def leadingCoeff (f : MvPolynomial σ K) : K :=
-  f.coeff (size.leadingMonomial f)
-
-variable {size}
+noncomputable def mleadingCoeff (f : MvPolynomial σ K) : K :=
+  f.coeff (leadingMonomial f)
 
 @[simp]
-theorem leadingMonomial_zero : size.leadingMonomial (0 : MvPolynomial σ K) = 0 := by
+theorem leadingMonomial_zero : leadingMonomial (0 : MvPolynomial σ K) = 0 := by
   simp [leadingMonomial]
 
 @[simp]
-theorem leadingCoeff_zero : size.leadingCoeff (0 : MvPolynomial σ K) = 0 := by
-  simp [MonomialOrder.leadingCoeff]
+theorem mleadingCoeff_zero : mleadingCoeff (0 : MvPolynomial σ K) = 0 := by
+  simp [mleadingCoeff]
 
 theorem leadingMonomial_mem_support {f : MvPolynomial σ K} (hf0 : f ≠ 0) :
-    size.leadingMonomial f ∈ f.support := by
+    leadingMonomial f ∈ f.support := by
   rw [leadingMonomial]
   cases h : f.support.toList.argmax size with
   | none => simp_all
@@ -94,16 +72,27 @@ theorem leadingMonomial_mem_support {f : MvPolynomial σ K} (hf0 : f ≠ 0) :
     simp_all
 
 @[simp]
-theorem leadingCoeff_eq_zero_iff {p : MvPolynomial σ K} :
-    size.leadingCoeff p = 0 ↔ p = 0 := by
-  rw [MonomialOrder.leadingCoeff]
+theorem mleadingCoeff_eq_zero_iff {p : MvPolynomial σ K} :
+     mleadingCoeff p = 0 ↔ p = 0 := by
+  rw [mleadingCoeff]
   by_cases hp0 : p = 0
   · simp [hp0]
   · simp only [hp0, iff_false]
     exact mem_support_iff.1 (leadingMonomial_mem_support hp0)
 
+noncomputable def norm (f : MvPolynomial σ K) : WithBot α :=
+  f.support.sup (fun m => (size m : α))
+
+@[simp]
+theorem norm_eq_bot_iff {f : MvPolynomial σ K} : norm f = ⊥ ↔ f = 0 := by
+  simp [norm, MvPolynomial.ext_iff]
+
+@[simp]
+theorem norm_zero : norm (0 : MvPolynomial σ K) = ⊥ := by
+  rw [norm_eq_bot_iff]
+
 theorem le_leadingMonomial_of_mem_support {f : MvPolynomial σ K} {m : σ →₀ ℕ}
-    (hm : m ∈ f.support) : size m ≤ size (size.leadingMonomial f) := by
+    (hm : m ∈ f.support) : size m ≤ size (leadingMonomial f) := by
   rw [leadingMonomial]
   cases h : f.support.toList.argmax size with
   | none => simp_all
@@ -112,96 +101,126 @@ theorem le_leadingMonomial_of_mem_support {f : MvPolynomial σ K} {m : σ →₀
     simp_all
 
 theorem leadingMonomial_le_iff_forall_le {p : MvPolynomial σ K} {a : α} :
-    size (size.leadingMonomial p) ≤ a ↔ ∀ n ∈ p.support, size n ≤ a := by
+    size (leadingMonomial p) ≤ a ↔ ∀ n ∈ p.support, size n ≤ a := by
   refine ⟨?_, ?_⟩
   · intro h q hq
     exact le_trans (le_leadingMonomial_of_mem_support hq) h
   · intro h
     by_cases hp0 : p = 0
     · simp_all only [support_zero, Finset.not_mem_empty, IsEmpty.forall_iff, implies_true,
-        leadingMonomial_zero, map_zero, bot_le]
+        leadingMonomial_zero, bot_le, size_zero]
     · exact h _ (leadingMonomial_mem_support hp0)
 
-variable (size)
-def monomialIdeal (S : Set (MvPolynomial σ K)) : Ideal (MvPolynomial σ K) :=
-  Ideal.span ((fun p => monomial (leadingMonomial size p) 1) '' (S \ {0}))
+theorem norm_le_iff_forall_le {p : MvPolynomial σ K} {a : WithBot α} :
+    norm p ≤ a ↔ ∀ n ∈ p.support, ((size n : α) : WithBot α) ≤ a := by
+  rw [norm, Finset.sup_le_iff]
 
-variable {size}
+theorem le_norm_of_mem_support {p : MvPolynomial σ K} {m : σ →₀ ℕ} (hm : m ∈ p.support) :
+    size m ≤ norm p :=
+  Finset.le_sup (f := fun m => ((size m : α) : WithBot α)) hm
+
+def monomialIdeal (S : Set (MvPolynomial σ K)) : Ideal (MvPolynomial σ K) :=
+  Ideal.span ((fun p => monomial (leadingMonomial p) 1) '' (S \ {0}))
+
 theorem mem_monomialIdeal_iff {p : MvPolynomial σ K} {S : Set (MvPolynomial σ K)} :
-    p ∈ monomialIdeal size S ↔ ∀ m ∈ p.support, ∃ q ∈ S, q ≠ 0 ∧
-      size.leadingMonomial q ≤ m := by
+    p ∈ monomialIdeal S ↔ ∀ m ∈ p.support, ∃ q ∈ S, q ≠ 0 ∧
+      leadingMonomial q ≤ m := by
   refine Iff.trans ?_ (Iff.trans (mem_ideal_span_monomial_image (x := p) (s :=
-    size.leadingMonomial '' (S \ {0}))) ?_)
+    leadingMonomial '' (S \ {0}))) ?_)
   · rw [Set.image_image, monomialIdeal]
   · simp only [Set.exists_mem_image, Set.mem_diff, Set.mem_singleton_iff, and_assoc]
 
-theorem leadingMonomial_add_le {p q : MvPolynomial σ K} :
-    size (size.leadingMonomial (p + q)) ≤
-      max (size (size.leadingMonomial p)) (size (size.leadingMonomial q)) := by
-  rw [leadingMonomial_le_iff_forall_le]
-  intro r hr
-  classical rcases Finset.mem_union.1 (support_add hr) with hr | hr
-  · exact le_sup_of_le_left (le_leadingMonomial_of_mem_support hr)
-  · exact le_sup_of_le_right (le_leadingMonomial_of_mem_support hr)
+theorem norm_add_le {p q : MvPolynomial σ K} :
+    norm (p + q) ≤ max (norm p) (norm q) := by
+  classical
+  rw [norm_le_iff_forall_le]
+  intro m hm
+  rcases (Finset.mem_union.1 (MvPolynomial.support_add hm)) with hmp | hmq
+  · exact le_max_of_le_left (le_norm_of_mem_support hmp)
+  · exact le_max_of_le_right (le_norm_of_mem_support hmq)
 
 @[simp]
 theorem leadingMonomial_neg {p : MvPolynomial σ K} :
-    size.leadingMonomial (-p) = size.leadingMonomial p := by
+    leadingMonomial (-p) = leadingMonomial p := by
   simp [leadingMonomial]
 
 theorem leadingMonomial_monomial [DecidableEq K] (m : σ →₀ ℕ) (a : K) :
-    size.leadingMonomial (monomial m a) = if a = 0 then 0 else m := by
+    leadingMonomial (monomial m a) = if a = 0 then 0 else m := by
   simp [leadingMonomial, support_monomial]
   split_ifs
   · simp
   · simp
 
-theorem size_leadingMon_sub_lt {p q : MvPolynomial σ K}
-    (hp0 : 0 < size.leadingMonomial p)
-    (hm : size.leadingMonomial p = size.leadingMonomial q)
-    (hc : size.leadingCoeff p = size.leadingCoeff q) :
-    size (size.leadingMonomial (p - q)) < size (size.leadingMonomial p) := by
+@[simp]
+theorem norm_neg {p : MvPolynomial σ K} : norm (-p) = norm p := by
+  simp [norm]
+
+theorem norm_eq_ite (p : MvPolynomial σ K) [Decidable (p = 0)] :
+    norm p = if p = 0 then (⊥ : WithBot α) else (size (leadingMonomial p) : α) := by
+  simp [norm]
+  split_ifs with hp0
+  · simp_all
+  · refine le_antisymm ?_ ?_
+    · simp only [Finset.sup_le_iff, WithBot.coe_le_coe]
+      intro m hm
+      exact le_leadingMonomial_of_mem_support hm
+    · refine (Finset.le_sup_iff (WithBot.bot_lt_coe _)).2 ?_
+      use leadingMonomial p
+      exact ⟨leadingMonomial_mem_support hp0, le_rfl⟩
+
+
+variable (size)
+
+theorem norm_sub_lt {p q : MvPolynomial σ K}
+    (hp0 : p ≠ 0)
+    (hm : leadingMonomial p = leadingMonomial q)
+    (hc : mleadingCoeff p = mleadingCoeff q) :
+    norm (p - q) < norm p := by
+  have hq0 : q ≠ 0 := by rintro rfl; simp_all
+  have hnpq : norm p = norm q := by classical simp_all [norm_eq_ite]
+  by_cases hpq : p = q
+  · simp [hpq, bot_lt_iff_ne_bot, hq0]
   refine lt_of_le_of_ne ?_ ?_
   · rw [sub_eq_add_neg]
-    exact le_trans leadingMonomial_add_le (by simp_all)
-  · intro h
+    exact le_trans norm_add_le (by simp_all)
+  · classical simp only [norm_eq_ite, sub_eq_zero, hpq, ↓reduceIte, hp0, WithBot.coe_lt_coe,
+      gt_iff_lt]
+    intro h
     have hp0 : p ≠ 0 := by rintro rfl; simp_all
     by_cases hpq : p = q
     · subst q; simp_all [@eq_comm _ ⊥]
-    rw [size.injective.eq_iff] at h
-    simp only [MonomialOrder.leadingCoeff] at hc
-    have hpq : (p - q).coeff (size.leadingMonomial p) = 0 := by
+    rw [WithBot.coe_inj, size_injective.eq_iff] at h
+    simp only [mleadingCoeff] at hc
+    have hpq : (p - q).coeff (leadingMonomial p) = 0 := by
       rw [coeff_sub, hc, hm, sub_self]
-    have hp : (p - q).coeff (size.leadingMonomial p) ≠ 0 := by
+    have hp : (p - q).coeff (leadingMonomial p) ≠ 0 := by
       rw [← h, ← mem_support_iff]
       exact leadingMonomial_mem_support (by rwa [Ne, sub_eq_zero])
     exact hp hpq
 
-variable (size)
-
 /-- A Groebner set is a Groebner basis for its span. -/
-structure IsGroebnerSet (G : Set (MvPolynomial σ K)) : Prop where
-  ( monomialIdeal_eq : size.monomialIdeal (Ideal.span G) = size.monomialIdeal G )
+structure IsGroebnerBasis (G : Set (MvPolynomial σ K)) : Prop where
+  ( monomialIdeal_eq : monomialIdeal (Ideal.span G) = monomialIdeal G )
 
 variable {size} {G : Set (MvPolynomial σ K)}
 
 def IsReduced (G : Set (MvPolynomial σ K)) (p : MvPolynomial σ K) : Prop :=
-  ∀ g ∈ G, g ≠ 0 → ¬ size.leadingMonomial g ≤ size.leadingMonomial p
+  p = 0 ∨ ∀ g ∈ G, g ≠ 0 → ¬ leadingMonomial g ≤ leadingMonomial p
 
-theorem isGroebnerSet_iff_monomialIdeal_eq :
-    IsGroebnerSet size G ↔ size.monomialIdeal (Ideal.span G) = size.monomialIdeal G := by
+theorem IsGroebnerBasis_iff_monomialIdeal_eq :
+    IsGroebnerBasis G ↔ monomialIdeal (Ideal.span G) = monomialIdeal G := by
   refine ⟨fun h => h.monomialIdeal_eq, fun h => ⟨h⟩⟩
 
-theorem isGroebnerSet_iff_leadingMonomial_le :
-    IsGroebnerSet size G ↔ ∀ f ∈ Ideal.span G, f ≠ 0 → ∃ g ∈ G, g ≠ 0 ∧
-      size.leadingMonomial g ≤ size.leadingMonomial f := by
-  simp only [Ideal.ext_iff, isGroebnerSet_iff_monomialIdeal_eq, mem_monomialIdeal_iff]
+theorem IsGroebnerBasis_iff_leadingMonomial_le :
+    IsGroebnerBasis G ↔ ∀ f ∈ Ideal.span G, f ≠ 0 → ∃ g ∈ G, g ≠ 0 ∧
+      leadingMonomial g ≤ leadingMonomial f := by
+  simp only [Ideal.ext_iff, IsGroebnerBasis_iff_monomialIdeal_eq, mem_monomialIdeal_iff]
   refine ⟨?_, ?_⟩
   · intro h f hfI hf0
     classical
-    exact (h (monomial (size.leadingMonomial f) 1)).1 (fun m hm => ⟨f, hfI, hf0, (by
+    exact (h (monomial (leadingMonomial f) 1)).1 (fun m hm => ⟨f, hfI, hf0, (by
       simp only [one_ne_zero, ↓reduceIte, Finset.mem_singleton, support_monomial] at hm
-      rw [hm])⟩) (size.leadingMonomial f) (by simp)
+      rw [hm])⟩) (leadingMonomial f) (by simp)
   · intro h f
     refine ⟨?_, ?_⟩
     · intro h1 m hmf
@@ -212,36 +231,39 @@ theorem isGroebnerSet_iff_leadingMonomial_le :
       rcases h1 m hmf with ⟨g, hg, hgm⟩
       exact ⟨g, Ideal.subset_span hg, hgm⟩
 
-theorem isGroebnerSet_iff_isReduced_eq_zero  :
-    IsGroebnerSet size G ↔ ∀ f ∈ Ideal.span G, size.IsReduced G f → f = 0 := by
-  simp only [isGroebnerSet_iff_leadingMonomial_le, IsReduced]
+theorem IsGroebnerBasis_iff_isReduced_eq_zero  :
+    IsGroebnerBasis G ↔ ∀ f ∈ Ideal.span G, IsReduced G f → f = 0 := by
+  simp only [IsGroebnerBasis_iff_leadingMonomial_le, IsReduced]
   refine forall_congr' fun f => forall_congr' fun hf => ?_
   by_cases hf0 : f = 0
   · subst hf0; simp
   · simp [hf0]
 
-variable (size) (G)
+variable (G)
+
+@[simp]
+theorem isReduced_zero : IsReduced G 0 := Or.inl rfl
 
 /-- This means that `p` lead reduces to `q` in a single step.  -/
 def SingleStepLeadReduction (p q : MvPolynomial σ K) : Prop :=
   ∃ g ∈ G, g ≠ 0 ∧
-    size.leadingMonomial g ≤ size.leadingMonomial p ∧
-    q = p - monomial (size.leadingMonomial p - size.leadingMonomial g)
-      (size.leadingCoeff p / size.leadingCoeff g) * g
+    leadingMonomial g ≤ leadingMonomial p ∧
+    q = p - monomial (leadingMonomial p - leadingMonomial g)
+      (mleadingCoeff p / mleadingCoeff g) * g
 
 structure LeadReduction (p q : MvPolynomial σ K) : Type _ where
   ( toList : List (MvPolynomial σ K) )
-  ( chain : toList.Chain (size.SingleStepLeadReduction G) p )
+  ( chain : toList.Chain (SingleStepLeadReduction G) p )
   ( last_eq : (p::toList).getLast (List.cons_ne_nil _ _) = q )
 
-variable {size} {G}
+variable {G}
 
 @[refl]
-def LeadReduction.refl (p : MvPolynomial σ K) : LeadReduction size G p p :=
+def LeadReduction.refl (p : MvPolynomial σ K) : LeadReduction G p p :=
   ⟨[], List.Chain.nil, rfl⟩
 
-def LeadReduction.trans {p q r : MvPolynomial σ K} (l : LeadReduction size G p q)
-    (l' : LeadReduction size G q r) : LeadReduction size G p r := by
+def LeadReduction.trans {p q r : MvPolynomial σ K} (l : LeadReduction G p q)
+    (l' : LeadReduction G q r) : LeadReduction G p r := by
   rcases l' with ⟨l', hl', rfl⟩
   rcases l with ⟨l, hl, rfl⟩
   refine ⟨l ++ l', ?_, ?_⟩
@@ -253,7 +275,7 @@ def LeadReduction.trans {p q r : MvPolynomial σ K} (l : LeadReduction size G p 
       exact List.Chain.cons hl.1 (ih hl.2 hl')
   · cases l' <;> simp
 
-theorem LeadReduction.sub_mem_span {p q : MvPolynomial σ K} (l : LeadReduction size G p q) :
+theorem LeadReduction.sub_mem_span {p q : MvPolynomial σ K} (l : LeadReduction G p q) :
     p - q ∈ Ideal.span G := by
   rcases l with ⟨l, hl, rfl⟩
   induction l generalizing p with
@@ -267,7 +289,7 @@ theorem LeadReduction.sub_mem_span {p q : MvPolynomial σ K} (l : LeadReduction 
     exact Ideal.mul_mem_left _ _ (Ideal.subset_span hg)
 
 @[simp]
-theorem LeadReduction.mem_span_iff {p q : MvPolynomial σ K} {l : LeadReduction size G p q} :
+theorem LeadReduction.mem_span_iff {p q : MvPolynomial σ K} {l : LeadReduction G p q} :
     p ∈ Ideal.span G ↔ q ∈ Ideal.span G := by
   rw [← Ideal.add_mem_iff_left _ ((Ideal.neg_mem_iff _).2 (sub_mem_span l)), ← l.last_eq]
   simp
@@ -277,20 +299,19 @@ section
 attribute [local instance] WellFoundedLT.toWellFoundedRelation
 
 theorem exists_leadReduction [WellFoundedLT α] : ∀ p : MvPolynomial σ K,
-    ∃ (q : MvPolynomial σ K) (l : LeadReduction size G p q), size.IsReduced G q := by
+    ∃ (q : MvPolynomial σ K) (l : LeadReduction G p q), IsReduced G q := by
   intro p
-  by_cases hp : size.IsReduced G p
+  by_cases hp : IsReduced G p
   · exact ⟨p, LeadReduction.refl p, hp⟩
-  · simp only [IsReduced, ne_eq, not_forall, Classical.not_imp, Decidable.not_not] at hp
-    rcases hp with ⟨g, hg, hg0, hgp⟩
+  · simp only [IsReduced, ne_eq, not_or, not_forall, Classical.not_imp, Decidable.not_not] at hp
+    rcases hp.2 with ⟨g, hg, hg0, hgp⟩
     let k := (p -
-      monomial (size.leadingMonomial p - size.leadingMonomial g) (size.leadingCoeff p /
-        size.leadingCoeff g) * g)
-    have wf : size (size.leadingMonomial k) < size (size.leadingMonomial p) := by
-      refine size_leadingMon_sub_lt ?_ ?_ ?_
-      · simp
-      · simp
-      · simp
+      monomial (leadingMonomial p - leadingMonomial g) (mleadingCoeff p / mleadingCoeff g) * g)
+    have wf : norm k < norm p := by
+      refine norm_sub_lt ?_ ?_ ?_
+      · rintro rfl; simp_all
+      · sorry
+      · sorry
     rcases exists_leadReduction k with ⟨q, l, hq⟩
     refine ⟨q, ?_, hq⟩
     refine ⟨k::l.toList, ?_, ?_⟩
@@ -298,7 +319,7 @@ theorem exists_leadReduction [WellFoundedLT α] : ∀ p : MvPolynomial σ K,
       refine ⟨?_, l.2⟩
       refine ⟨g, hg, hg0, hgp, rfl⟩
     · simp [l.3]
-  termination_by p => size (size.leadingMonomial p)
+  termination_by p => norm p
 
 end
 
@@ -316,7 +337,7 @@ theorem exists_leadingMonomial_mem_eqvGen_leadReduction
 -- theorem IsGrobnerSet.exists_complete_leadReduction_of_finite_vars
 --     (hvars : Set.Finite (⋃ g ∈ G, (g.vars : Set σ))) {p : MvPolynomial σ R} :
 --     ∃ l : LeadReduction size G p, l.IsComplete := by
---   rw [isGroebnerSet_iff_leadingMonomial_le] at hG
+--   rw [IsGroebnerBasis_iff_leadingMonomial_le] at hG
 --   rcases hG p hp with ⟨g, hg, hpg⟩
 
 theorem eqvGen_leadReduction {p q : MvPolynomial σ R} :
