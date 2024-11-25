@@ -158,6 +158,33 @@ theorem leadingMonomial_monomial [DecidableEq K] (m : σ →₀ ℕ) (a : K) :
   · simp
   · simp
 
+@[simp]
+theorem mleadingCoeff_monomial (m : σ →₀ ℕ) (a : K) :
+    mleadingCoeff (monomial m a) = a := by
+  classical
+    rw [mleadingCoeff, leadingMonomial_monomial]
+    split_ifs <;> simp_all
+
+theorem coeff_leadingMonomial_add_mul {p q : MvPolynomial σ K} :
+    coeff (leadingMonomial p + leadingMonomial q) (p * q) = mleadingCoeff p * mleadingCoeff q := by
+  by_cases hpq0 : p * q = 0
+  · rw [hpq0]; simp_all
+  classical rw [coeff_mul]
+  rw [Finset.sum_eq_single (leadingMonomial p, leadingMonomial q)]
+  · rfl
+  · simp only [Finset.mem_antidiagonal, ne_eq, mul_eq_zero, Prod.forall, Prod.mk.injEq, not_and]
+    intro m n hmn h
+    rw [or_iff_not_imp_left, ← Ne, ← mem_support_iff]
+    intro hm
+    have := size_le_leadingMonomial_of_mem_support hm
+    have := (size_add_le_size_add_right_iff (p := n)).2 this
+    rw [hmn, size_add_le_size_add_left_iff] at this
+    by_contra hnq
+    rw [← Ne, ← mem_support_iff] at hnq
+    have := size_injective (le_antisymm this (size_le_leadingMonomial_of_mem_support hnq))
+    simp_all
+  · simp
+
 theorem leadingMonomial_mul (p q : MvPolynomial σ K) [Decidable (p * q = 0)] :
     leadingMonomial (p * q) = if (p * q) = 0 then 0 else
       leadingMonomial p + leadingMonomial q := by
@@ -173,24 +200,18 @@ theorem leadingMonomial_mul (p q : MvPolynomial σ K) [Decidable (p * q = 0)] :
     · exact size_le_leadingMonomial_of_mem_support hx
     · exact size_le_leadingMonomial_of_mem_support hy
   · refine size_le_leadingMonomial_of_mem_support ?_
-    classical rw [mem_support_iff, coeff_mul]
-    rw [Finset.sum_eq_single (leadingMonomial p, leadingMonomial q)]
-    · simp only [ne_eq, mul_eq_zero, not_or, ← mem_support_iff]
-      rw [mul_eq_zero, not_or] at hpq0
-      exact ⟨leadingMonomial_mem_support hpq0.1, leadingMonomial_mem_support hpq0.2⟩
-    · simp only [Finset.mem_antidiagonal, ne_eq, mul_eq_zero, Prod.forall, Prod.mk.injEq, not_and]
-      intro m n hmn h
-      rw [or_iff_not_imp_left, ← Ne, ← mem_support_iff]
-      intro hm
-      have := size_le_leadingMonomial_of_mem_support hm
-      have := (size_add_le_size_add_right_iff (p := n)).2 this
-      rw [hmn, size_add_le_size_add_left_iff] at this
-      by_contra hnq
-      rw [← Ne, ← mem_support_iff] at hnq
-      have := size_injective (le_antisymm this (size_le_leadingMonomial_of_mem_support hnq))
-      simp_all
-    · simp
+    classical rw [mem_support_iff, coeff_leadingMonomial_add_mul]
+    simp only [ne_eq, mul_eq_zero, not_or, ← mem_support_iff, mleadingCoeff]
+    rw [mul_eq_zero, not_or] at hpq0
+    exact ⟨leadingMonomial_mem_support hpq0.1, leadingMonomial_mem_support hpq0.2⟩
 
+theorem mleadingCoeff_mul (p q : MvPolynomial σ K) : mleadingCoeff (p * q) =
+    mleadingCoeff p * mleadingCoeff q := by
+  classical
+  rw [mleadingCoeff, leadingMonomial_mul]
+  split_ifs with hpq
+  · simp [hpq]; simp_all
+  · rw [coeff_leadingMonomial_add_mul]
 
 @[simp]
 theorem norm_neg {p : MvPolynomial σ K} : norm (-p) = norm p := by
@@ -204,13 +225,10 @@ theorem norm_eq_ite (p : MvPolynomial σ K) [Decidable (p = 0)] :
   · refine le_antisymm ?_ ?_
     · simp only [Finset.sup_le_iff, WithBot.coe_le_coe]
       intro m hm
-      exact le_leadingMonomial_of_mem_support hm
+      exact size_le_leadingMonomial_of_mem_support hm
     · refine (Finset.le_sup_iff (WithBot.bot_lt_coe _)).2 ?_
       use leadingMonomial p
       exact ⟨leadingMonomial_mem_support hp0, le_rfl⟩
-
-
-variable (size)
 
 theorem norm_sub_lt {p q : MvPolynomial σ K}
     (hp0 : p ≠ 0)
@@ -340,7 +358,7 @@ section
 attribute [local instance] WellFoundedLT.toWellFoundedRelation
 
 theorem exists_leadReduction [WellFoundedLT α] : ∀ p : MvPolynomial σ K,
-    ∃ (q : MvPolynomial σ K) (l : LeadReduction G p q), IsReduced G q := by
+    ∃ (q : MvPolynomial σ K) (_l : LeadReduction G p q), IsReduced G q := by
   intro p
   by_cases hp : IsReduced G p
   · exact ⟨p, LeadReduction.refl p, hp⟩
@@ -351,8 +369,17 @@ theorem exists_leadReduction [WellFoundedLT α] : ∀ p : MvPolynomial σ K,
     have wf : norm k < norm p := by
       refine norm_sub_lt ?_ ?_ ?_
       · rintro rfl; simp_all
-      · sorry
-      · sorry
+      · classical rw [leadingMonomial_mul]
+        split_ifs
+        simp_all
+        classical rw [leadingMonomial_monomial]
+        split_ifs
+        simp_all
+        simp_all
+        rw [tsub_add_cancel_of_le hgp]
+      · rw [mleadingCoeff_mul, mleadingCoeff_monomial]
+        rw [div_mul_cancel₀]
+        simpa
     rcases exists_leadReduction k with ⟨q, l, hq⟩
     refine ⟨q, ?_, hq⟩
     refine ⟨k::l.toList, ?_, ?_⟩
@@ -363,7 +390,6 @@ theorem exists_leadReduction [WellFoundedLT α] : ∀ p : MvPolynomial σ K,
   termination_by p => norm p
 
 end
-
 
 theorem exists_leadingMonomial_mem_eqvGen_leadReduction
 
