@@ -8,6 +8,7 @@ import Mathlib.Algebra.MvPolynomial.Basic
 import Mathlib.Data.Finsupp.PWO
 import Mathlib.Algebra.MvPolynomial.CommRing
 import Mathlib.RingTheory.MvPolynomial.Ideal
+import Mathlib.RingTheory.Polynomial.Basic
 import Mathlib.RingTheory.Ideal.Maps
 
 /-!
@@ -41,6 +42,12 @@ theorem size_add_le_size_add_right_iff {m n p : σ →₀ ℕ} :
 theorem size_add_le_size_add_left_iff {m n p : σ →₀ ℕ} :
     size (p + m) ≤ size (p + n) ↔ size m ≤ size n := by
   rw [add_comm, add_comm p n, size_add_le_size_add_right_iff]
+
+theorem size_add_le_size_add {m n p q : σ →₀ ℕ}
+    (hmp : size m ≤ size p) (hnq : size n ≤ size q) :
+    size (m + n) ≤ size (p + q) :=
+  calc size (m + n) ≤ size (p + n) := size_add_le_size_add_right_iff.2 hmp
+    _ ≤ size (p + q) := size_add_le_size_add_left_iff.2 hnq
 
 @[simp]
 theorem size_eq_bot_iff {m : σ →₀ ℕ} : size m = ⊥ ↔ m = 0 := by
@@ -91,7 +98,7 @@ theorem norm_eq_bot_iff {f : MvPolynomial σ K} : norm f = ⊥ ↔ f = 0 := by
 theorem norm_zero : norm (0 : MvPolynomial σ K) = ⊥ := by
   rw [norm_eq_bot_iff]
 
-theorem le_leadingMonomial_of_mem_support {f : MvPolynomial σ K} {m : σ →₀ ℕ}
+theorem size_le_leadingMonomial_of_mem_support {f : MvPolynomial σ K} {m : σ →₀ ℕ}
     (hm : m ∈ f.support) : size m ≤ size (leadingMonomial f) := by
   rw [leadingMonomial]
   cases h : f.support.toList.argmax size with
@@ -100,11 +107,11 @@ theorem le_leadingMonomial_of_mem_support {f : MvPolynomial σ K} {m : σ →₀
     classical rw [List.argmax_eq_some_iff] at h
     simp_all
 
-theorem leadingMonomial_le_iff_forall_le {p : MvPolynomial σ K} {a : α} :
+theorem size_leadingMonomial_le_iff_forall_le {p : MvPolynomial σ K} {a : α} :
     size (leadingMonomial p) ≤ a ↔ ∀ n ∈ p.support, size n ≤ a := by
   refine ⟨?_, ?_⟩
   · intro h q hq
-    exact le_trans (le_leadingMonomial_of_mem_support hq) h
+    exact le_trans (size_le_leadingMonomial_of_mem_support hq) h
   · intro h
     by_cases hp0 : p = 0
     · simp_all only [support_zero, Finset.not_mem_empty, IsEmpty.forall_iff, implies_true,
@@ -150,6 +157,40 @@ theorem leadingMonomial_monomial [DecidableEq K] (m : σ →₀ ℕ) (a : K) :
   split_ifs
   · simp
   · simp
+
+theorem leadingMonomial_mul (p q : MvPolynomial σ K) [Decidable (p * q = 0)] :
+    leadingMonomial (p * q) = if (p * q) = 0 then 0 else
+      leadingMonomial p + leadingMonomial q := by
+  by_cases hpq0 : p * q = 0
+  · simp [hpq0]
+  simp only [hpq0, ↓reduceIte]
+  apply size_injective
+  refine le_antisymm ?_ ?_
+  · rw [size_leadingMonomial_le_iff_forall_le]
+    intro m hm
+    classical rcases Finset.mem_add.1 (support_mul _ _ hm) with ⟨x, hx, y, hy, rfl⟩
+    refine size_add_le_size_add ?_ ?_
+    · exact size_le_leadingMonomial_of_mem_support hx
+    · exact size_le_leadingMonomial_of_mem_support hy
+  · refine size_le_leadingMonomial_of_mem_support ?_
+    classical rw [mem_support_iff, coeff_mul]
+    rw [Finset.sum_eq_single (leadingMonomial p, leadingMonomial q)]
+    · simp only [ne_eq, mul_eq_zero, not_or, ← mem_support_iff]
+      rw [mul_eq_zero, not_or] at hpq0
+      exact ⟨leadingMonomial_mem_support hpq0.1, leadingMonomial_mem_support hpq0.2⟩
+    · simp only [Finset.mem_antidiagonal, ne_eq, mul_eq_zero, Prod.forall, Prod.mk.injEq, not_and]
+      intro m n hmn h
+      rw [or_iff_not_imp_left, ← Ne, ← mem_support_iff]
+      intro hm
+      have := size_le_leadingMonomial_of_mem_support hm
+      have := (size_add_le_size_add_right_iff (p := n)).2 this
+      rw [hmn, size_add_le_size_add_left_iff] at this
+      by_contra hnq
+      rw [← Ne, ← mem_support_iff] at hnq
+      have := size_injective (le_antisymm this (size_le_leadingMonomial_of_mem_support hnq))
+      simp_all
+    · simp
+
 
 @[simp]
 theorem norm_neg {p : MvPolynomial σ K} : norm (-p) = norm p := by
