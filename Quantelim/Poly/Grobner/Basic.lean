@@ -9,7 +9,9 @@ import Mathlib.Data.Finsupp.PWO
 import Mathlib.Algebra.MvPolynomial.CommRing
 import Mathlib.RingTheory.MvPolynomial.Ideal
 import Mathlib.RingTheory.Polynomial.Basic
+import Mathlib.RingTheory.MvPolynomial.Basic
 import Mathlib.RingTheory.Ideal.Maps
+import Mathlib.Algebra.Group.Pointwise.Set.Basic
 
 /-!
 
@@ -304,15 +306,12 @@ variable (G)
 theorem isReduced_zero : IsReduced G 0 := Or.inl rfl
 
 /-- This means that `p` lead reduces to `q` in a single step.  -/
-def SingleStepLeadReduction (p q : MvPolynomial σ K) : Prop :=
-  ∃ g ∈ G, g ≠ 0 ∧
-    leadingMonomial g ≤ leadingMonomial p ∧
-    q = p - monomial (leadingMonomial p - leadingMonomial g)
-      (mleadingCoeff p / mleadingCoeff g) * g
+def IsSingleStepLeadReduction (p q : MvPolynomial σ K) : Prop :=
+  ∃ g m x, g ∈ G ∧ q = p - monomial m x * g ∧ norm q < norm p
 
 structure LeadReduction (p q : MvPolynomial σ K) : Type _ where
   ( toList : List (MvPolynomial σ K) )
-  ( chain : toList.Chain (SingleStepLeadReduction G) p )
+  ( chain : toList.Chain (IsSingleStepLeadReduction G) p )
   ( last_eq : (p::toList).getLast (List.cons_ne_nil _ _) = q )
 
 variable {G}
@@ -321,6 +320,7 @@ variable {G}
 def LeadReduction.refl (p : MvPolynomial σ K) : LeadReduction G p p :=
   ⟨[], List.Chain.nil, rfl⟩
 
+@[trans]
 def LeadReduction.trans {p q r : MvPolynomial σ K} (l : LeadReduction G p q)
     (l' : LeadReduction G q r) : LeadReduction G p r := by
   rcases l' with ⟨l', hl', rfl⟩
@@ -343,15 +343,25 @@ theorem LeadReduction.sub_mem_span {p q : MvPolynomial σ K} (l : LeadReduction 
     rw [List.chain_cons] at hl
     rw [← Ideal.add_mem_iff_left _ ((Ideal.neg_mem_iff _).2 (ih hl.2))]
     simp only [ne_eq, reduceCtorEq, not_false_eq_true, List.getLast_cons]
-    rcases hl.1 with ⟨g, hg, r, hrs, hgm, rfl⟩
+    rcases hl.1 with ⟨g, m, x, hgG, rfl, hn⟩
     ring_nf
-    exact Ideal.mul_mem_left _ _ (Ideal.subset_span hg)
+    exact Ideal.mul_mem_left _ _ (Ideal.subset_span hgG)
 
 @[simp]
 theorem LeadReduction.mem_span_iff {p q : MvPolynomial σ K} {l : LeadReduction G p q} :
     p ∈ Ideal.span G ↔ q ∈ Ideal.span G := by
   rw [← Ideal.add_mem_iff_left _ ((Ideal.neg_mem_iff _).2 (sub_mem_span l)), ← l.last_eq]
   simp
+
+open Pointwise
+
+theorem mem_span_iff_mem_span_monomial {p : MvPolynomial σ K} :
+    p ∈ Ideal.span G ↔ p ∈ Submodule.span K
+      (Set.range (fun m : (σ →₀ ℕ) => monomial m (1 : K)) * G) := by
+  have := Submodule.span_smul_of_span_eq_top (MvPolynomial.basisMonomials σ K).span_eq G
+  simp only [coe_basisMonomials, smul_eq_mul, Ideal.submodule_span_eq, Submodule.ext_iff,
+    Submodule.restrictScalars_mem] at this
+  simp [this]
 
 section
 
@@ -385,32 +395,51 @@ theorem exists_leadReduction [WellFoundedLT α] : ∀ p : MvPolynomial σ K,
     refine ⟨k::l.toList, ?_, ?_⟩
     · rw [List.chain_cons]
       refine ⟨?_, l.2⟩
-      refine ⟨g, hg, hg0, hgp, rfl⟩
+      refine ⟨g, _, _, hg, rfl, wf⟩
     · simp [l.3]
   termination_by p => norm p
 
+open Relation
+
+theorem exists_leadingMonomial_mem_eqvGen_leadReduction [WellFoundedLT α] {p : MvPolynomial σ K}
+     (G : Set (MvPolynomial σ K)) (hp : p ∈ Ideal.span G) : ∃ (q : MvPolynomial σ K), norm p = norm q ∧
+       Relation.EqvGen (fun p q => Nonempty (LeadReduction G p q)) q 0 := by
+  rw [mem_span_iff_mem_span_monomial] at hp
+  rcases Submodule.mem_span_finite_of_mem_span hp with ⟨s, hsG, hsp⟩
+  induction s using Finset.induction_on generalizing p with
+  | empty =>
+    refine ⟨0, ?_⟩
+    simp_all only [Finset.coe_empty, Submodule.span_empty, Submodule.mem_bot, norm_zero, true_and]
+    exact EqvGen.refl _
+  | @insert a s has ih =>
+    simp only [← Ideal.submodule_span_eq, Finset.coe_insert, Submodule.mem_span_insert] at hsp
+    rcases hsp with ⟨x, y, hy, rfl⟩
+    simp only [Finset.coe_insert, Set.insert_subset_iff, Set.mem_mul, Set.mem_range,
+      exists_exists_eq_and] at hsG
+    rcases hsG.1 with ⟨m, g, hg, rfl⟩
+    replace hsG := hsG.2
+    simp only [← smul_mul_assoc, smul_monomial, smul_eq_mul, mul_one] at hp ⊢
+    have hxy : norm (monomial m x * g + y) ≤ max (norm (monomial m x * g)) (norm y) := norm_add_le
+    rcases ih (Submodule.span_mono hsG hy) hsG hy with ⟨q, hq, hqe⟩
+    rcases lt_or_eq_of_le hxy with hxy | hxy
+    · refine ⟨(monomial m x) * g + q, ?_, ?_⟩
+      · admit
+      · refine EqvGen.trans _ _ _ ?_ hqe
+        refine EqvGen.rel _ _ ⟨?_⟩
+        refine ⟨[q], ?_, by simp⟩
+        simp only [List.chain_cons, IsSingleStepLeadReduction, ne_eq, List.Chain.nil, and_true]
+        use g, hg
+        ring_nf
+
+
+
+
+    · admit
+
 end
 
-theorem exists_leadingMonomial_mem_eqvGen_leadReduction
 
--- theorem LeadReduction.chain_size_lt {p q : MvPolynomial σ R} (l : LeadReduction size G p) :
---     l.toList.Chain (fun q r => r ≠ 0 → size (size.leadingMonomial r) <
---       size (size.leadingMonomial q)) p := by
---   have := l.chain
---   rw [← List.map_id l.toList] at this
---   refine List.chain_of_chain_map id ?_ this
---   rintro q r ⟨g, hg, r, hr, hgm, rfl⟩ h
---   refine size_leadingMon_sub_lt ?_ ?_ ?_
--- theorem IsGrobnerSet.exists_complete_leadReduction_of_finite_vars
---     (hvars : Set.Finite (⋃ g ∈ G, (g.vars : Set σ))) {p : MvPolynomial σ R} :
---     ∃ l : LeadReduction size G p, l.IsComplete := by
---   rw [IsGroebnerBasis_iff_leadingMonomial_le] at hG
---   rcases hG p hp with ⟨g, hg, hpg⟩
-
-theorem eqvGen_leadReduction {p q : MvPolynomial σ R} :
 
 end MonomialOrder
-
-
 
 end MvPolynomial
