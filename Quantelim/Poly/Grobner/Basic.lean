@@ -498,8 +498,7 @@ theorem eqvGen_add {g q : MvPolynomial σ K} (m : σ →₀ ℕ) (x : K) (hgG : 
       add_left_comm, add_assoc, neg_add]
   exact EqvGen.trans _ _ _ (EqvGen.rel _ _ ⟨lr2⟩) (EqvGen.symm _ _ (EqvGen.rel _ _ ⟨lr1⟩))
 
-theorem eqvGen_leadReduction {p : MvPolynomial σ K}
-     {G : Set (MvPolynomial σ K)} (hp : p ∈ Ideal.span G) :
+theorem eqvGen_leadReduction {p : MvPolynomial σ K} (hp : p ∈ Ideal.span G) :
        EqvGen (fun p q => Nonempty (LeadReduction G p q)) p 0 := by
   rw [mem_span_iff_mem_span_monomial] at hp
   rcases Submodule.mem_span_finite_of_mem_span hp with ⟨s, hsG, hsp⟩
@@ -532,10 +531,12 @@ theorem eqvGen_leadReduction {p : MvPolynomial σ K}
       simp only [Set.mem_mul, Set.mem_range, exists_exists_eq_and] at this
       rcases this with ⟨y, g, hgG, rfl⟩
       subst hx
-      rcases lt_trichotomy (norm (x (monomial y 1 * g) • (monomial y 1 * g) + ∑ i in s'.erase (monomial y 1 * g), x i • i))
-        (norm (∑ i in s'.erase (monomial y 1 * g), x i • i)) with hglt | hglt | hglt
+      rcases lt_trichotomy (norm (x (monomial y 1 * g) • (monomial y 1 * g) +
+          ∑ i in s'.erase (monomial y 1 * g), x i • i))
+          (norm (∑ i in s'.erase (monomial y 1 * g), x i • i)) with hglt | hglt | hglt
       · refine EqvGen.trans _ _ _ (EqvGen.symm _ _ ?_) this
-        refine EqvGen.rel _ _ ⟨⟨[x (monomial y 1 * g) • (monomial y 1 * g) + ∑ i in s'.erase (monomial y 1 * g), x i • i], ?_, rfl⟩⟩
+        refine EqvGen.rel _ _ ⟨⟨[x (monomial y 1 * g) • (monomial y 1 * g) +
+          ∑ i in s'.erase (monomial y 1 * g), x i • i], ?_, rfl⟩⟩
         simp only [List.chain_cons, IsSingleStepLeadReduction, List.Chain.nil, and_true]
         refine ⟨g, y, -x (monomial y 1 * g), hgG, ?_, hglt⟩
         simp [smul_eq_C_mul, monomial_eq, mul_assoc, add_comm]
@@ -553,6 +554,42 @@ theorem eqvGen_leadReduction {p : MvPolynomial σ K}
         simp [smul_eq_C_mul, monomial_eq, mul_assoc]
     · simp_all only [Finset.not_nonempty_iff_eq_empty, Finset.sum_empty]
       exact EqvGen.refl _
+
+theorem exists_reduction_of_confluent {p q : MvPolynomial σ K}
+    (hpq : EqvGen (fun p q => Nonempty (LeadReduction G p q)) p q)
+    (confl : ∀ {q r s} (_l1 : LeadReduction G q r) (_l2 : LeadReduction G q s),
+      Σ t, LeadReduction G r t × LeadReduction G s t) :
+    ∃ t, Nonempty (LeadReduction G p t × LeadReduction G q t) := by
+  induction hpq with
+  | refl p => exact ⟨p, LeadReduction.refl _, LeadReduction.refl _⟩
+  | rel p q l => exact ⟨q, Classical.choice l, LeadReduction.refl _⟩
+  | symm p q l ih => simp_all [nonempty_prod, and_comm]
+  | trans p q r l1 l2 ih1 ih2 =>
+    rcases ih1 with ⟨t1, ⟨⟨lt11, lt12⟩⟩⟩
+    rcases ih2 with ⟨t2, ⟨⟨lt21, lt22⟩⟩⟩
+    rcases confl lt12 lt21 with ⟨t, ⟨ltr, lts⟩⟩
+    exact ⟨t, lt11.trans ltr, lt22.trans lts⟩
+
+noncomputable def zero_reduction_of_confluent {p : MvPolynomial σ K}
+    (hp : p ∈ Ideal.span G) (confl : ∀ {q r s} (_l1 : LeadReduction G q r) (_l2 : LeadReduction G q s),
+      Σ t, LeadReduction G r t × LeadReduction G s t) : LeadReduction G p 0 := by
+  have := eqvGen_leadReduction hp
+  have := exists_reduction_of_confluent this confl
+  apply Classical.choice
+  rcases this with ⟨t, ⟨lt₁, lt₂⟩⟩
+  have := norm_le_of_leadReduction lt₂
+  simp at this
+  subst t
+  exact ⟨lt₁⟩
+
+def criticalPair (g₁ g₂ : MvPolynomial σ K) : MvPolynomial σ K :=
+  let m := leadingMonomial g₁ - leadingMonomial g₂
+  let x := mleadingCoeff g₁ / mleadingCoeff g₂
+  g₁ - monomial m x * g₂
+
+theorem exists_criticalPair {p : MvPolynomial σ K} (hp : p ∈ Ideal.span G) (hp0 : p ≠ 0)
+    (hR : IsReduced G p) : ∃ g₁ g₂,
+
 
 end MonomialOrder
 

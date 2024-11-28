@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2024 Chris Hughes. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Chris Hughes
+-/
 import QuantElim.Poly.Div
 import QuantElim.forMathlib
 
@@ -41,5 +46,5 @@ theorem eval_elimSquares {R : Type*} [CommRing R] [IsDomain R] [CharZero R] : âˆ
     apply Polynomial.square_free_key
     Â· simp
 
-example 
+example
 end Poly
