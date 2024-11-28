@@ -148,6 +148,16 @@ theorem norm_add_le {p q : MvPolynomial σ K} :
   · exact le_max_of_le_left (le_norm_of_mem_support hmp)
   · exact le_max_of_le_right (le_norm_of_mem_support hmq)
 
+theorem norm_sum_le_of_le {ι : Type*} (s : Finset ι) (f : ι → MvPolynomial σ K) (a : WithBot α)
+    (h : ∀ i ∈ s, norm (f i) ≤ a) : norm (∑ i in s, f i) ≤ a := by
+  classical
+  induction s using Finset.induction_on with
+  | empty => simp
+  | @insert a s has ih =>
+    rw [Finset.sum_insert has]
+    refine le_trans norm_add_le (max_le (h _ (by simp)) ?_)
+    exact ih (fun i hi => h i (by simp [hi]))
+
 @[simp]
 theorem leadingMonomial_neg {p : MvPolynomial σ K} :
     leadingMonomial (-p) = leadingMonomial p := by
@@ -159,6 +169,12 @@ theorem leadingMonomial_monomial [DecidableEq K] (m : σ →₀ ℕ) (a : K) :
   split_ifs
   · simp
   · simp
+
+theorem leadingMonomial_C_mul {a : K} {p : MvPolynomial σ K} (ha : a ≠ 0) :
+    leadingMonomial (C a * p) = leadingMonomial p := by
+  rw [leadingMonomial, ← smul_eq_C_mul]
+  congr 3
+  simp [Finset.ext_iff, ha]
 
 @[simp]
 theorem mleadingCoeff_monomial (m : σ →₀ ℕ) (a : K) :
@@ -218,6 +234,11 @@ theorem mleadingCoeff_mul (p q : MvPolynomial σ K) : mleadingCoeff (p * q) =
 @[simp]
 theorem norm_neg {p : MvPolynomial σ K} : norm (-p) = norm p := by
   simp [norm]
+
+theorem norm_sub_le {p q : MvPolynomial σ K} :
+    norm (p - q) ≤ max (norm p) (norm q) := by
+  rw [sub_eq_add_neg]
+  refine le_trans norm_add_le (by simp)
 
 theorem norm_eq_ite (p : MvPolynomial σ K) [Decidable (p = 0)] :
     norm p = if p = 0 then (⊥ : WithBot α) else (size (leadingMonomial p) : α) := by
@@ -363,7 +384,49 @@ theorem mem_span_iff_mem_span_monomial {p : MvPolynomial σ K} :
     Submodule.restrictScalars_mem] at this
   simp [this]
 
+theorem norm_le_of_leadReduction {p q : MvPolynomial σ K} (l : LeadReduction G p q) : norm q ≤ norm p := by
+  rcases l with ⟨l, hl, rfl⟩
+  induction l generalizing p with
+  | nil => simp_all
+  | cons q l ih =>
+    simp [IsSingleStepLeadReduction] at hl
+    refine le_trans (ih hl.2) ?_
+    exact le_of_lt (by tauto)
+
+theorem norm_lt_of_leadReduction {p q : MvPolynomial σ K} (l : LeadReduction G p q)
+    (hln : l.toList ≠ []) : norm q < norm p := by
+  rcases l with ⟨l, hl, rfl⟩
+  induction l generalizing p with
+  | nil => simp_all
+  | cons q l ih =>
+    simp only [List.chain_cons, IsSingleStepLeadReduction, exists_and_left, exists_and_right] at hl
+    have : norm q < norm p := by tauto
+    refine lt_of_le_of_lt ?_ this
+    exact norm_le_of_leadReduction ⟨l, hl.2, rfl⟩
+
 section
+
+noncomputable def singleLeadReduction {p g : MvPolynomial σ K} (hgG : g ∈ G)
+    (hle : leadingMonomial g ≤ leadingMonomial p) (hp0 : p ≠ 0)
+    (hg0 : g ≠ 0) : Σ k : MvPolynomial σ K, LeadReduction G p k :=
+  let k := p - monomial (leadingMonomial p - leadingMonomial g) (mleadingCoeff p / mleadingCoeff g) * g
+  ⟨k, ⟨[k], by
+    simp only [IsSingleStepLeadReduction, List.Chain.nil, List.chain_cons, and_true]
+    refine ⟨g, _, _, hgG, rfl, ?_⟩
+    refine norm_sub_lt ?_ ?_ ?_
+    · rintro rfl; simp_all
+    · classical rw [leadingMonomial_mul]
+      split_ifs
+      simp_all
+      classical rw [leadingMonomial_monomial]
+      split_ifs
+      simp_all
+      simp_all
+      rw [tsub_add_cancel_of_le hle]
+    · rw [mleadingCoeff_mul, mleadingCoeff_monomial]
+      rw [div_mul_cancel₀]
+      simpa
+    , rfl⟩ ⟩
 
 attribute [local instance] WellFoundedLT.toWellFoundedRelation
 
@@ -374,22 +437,9 @@ theorem exists_leadReduction [WellFoundedLT α] : ∀ p : MvPolynomial σ K,
   · exact ⟨p, LeadReduction.refl p, hp⟩
   · simp only [IsReduced, ne_eq, not_or, not_forall, Classical.not_imp, Decidable.not_not] at hp
     rcases hp.2 with ⟨g, hg, hg0, hgp⟩
-    let k := (p -
-      monomial (leadingMonomial p - leadingMonomial g) (mleadingCoeff p / mleadingCoeff g) * g)
-    have wf : norm k < norm p := by
-      refine norm_sub_lt ?_ ?_ ?_
-      · rintro rfl; simp_all
-      · classical rw [leadingMonomial_mul]
-        split_ifs
-        simp_all
-        classical rw [leadingMonomial_monomial]
-        split_ifs
-        simp_all
-        simp_all
-        rw [tsub_add_cancel_of_le hgp]
-      · rw [mleadingCoeff_mul, mleadingCoeff_monomial]
-        rw [div_mul_cancel₀]
-        simpa
+    let l := singleLeadReduction hg hgp hp.1 hg0
+    let k := l.1
+    have wf : norm k < norm p := norm_lt_of_leadReduction l.2 (by simp [l, singleLeadReduction])
     rcases exists_leadReduction k with ⟨q, l, hq⟩
     refine ⟨q, ?_, hq⟩
     refine ⟨k::l.toList, ?_, ?_⟩
@@ -399,46 +449,110 @@ theorem exists_leadReduction [WellFoundedLT α] : ∀ p : MvPolynomial σ K,
     · simp [l.3]
   termination_by p => norm p
 
-open Relation
-
-theorem exists_leadingMonomial_mem_eqvGen_leadReduction [WellFoundedLT α] {p : MvPolynomial σ K}
-     (G : Set (MvPolynomial σ K)) (hp : p ∈ Ideal.span G) : ∃ (q : MvPolynomial σ K), norm p = norm q ∧
-       Relation.EqvGen (fun p q => Nonempty (LeadReduction G p q)) q 0 := by
-  rw [mem_span_iff_mem_span_monomial] at hp
-  rcases Submodule.mem_span_finite_of_mem_span hp with ⟨s, hsG, hsp⟩
-  induction s using Finset.induction_on generalizing p with
-  | empty =>
-    refine ⟨0, ?_⟩
-    simp_all only [Finset.coe_empty, Submodule.span_empty, Submodule.mem_bot, norm_zero, true_and]
-    exact EqvGen.refl _
-  | @insert a s has ih =>
-    simp only [← Ideal.submodule_span_eq, Finset.coe_insert, Submodule.mem_span_insert] at hsp
-    rcases hsp with ⟨x, y, hy, rfl⟩
-    simp only [Finset.coe_insert, Set.insert_subset_iff, Set.mem_mul, Set.mem_range,
-      exists_exists_eq_and] at hsG
-    rcases hsG.1 with ⟨m, g, hg, rfl⟩
-    replace hsG := hsG.2
-    simp only [← smul_mul_assoc, smul_monomial, smul_eq_mul, mul_one] at hp ⊢
-    have hxy : norm (monomial m x * g + y) ≤ max (norm (monomial m x * g)) (norm y) := norm_add_le
-    rcases ih (Submodule.span_mono hsG hy) hsG hy with ⟨q, hq, hqe⟩
-    rcases lt_or_eq_of_le hxy with hxy | hxy
-    · refine ⟨(monomial m x) * g + q, ?_, ?_⟩
-      · admit
-      · refine EqvGen.trans _ _ _ ?_ hqe
-        refine EqvGen.rel _ _ ⟨?_⟩
-        refine ⟨[q], ?_, by simp⟩
-        simp only [List.chain_cons, IsSingleStepLeadReduction, ne_eq, List.Chain.nil, and_true]
-        use g, hg
-        ring_nf
-
-
-
-
-    · admit
-
 end
 
+open Relation
 
+theorem eqvGen_add {g q : MvPolynomial σ K} (m : σ →₀ ℕ) (x : K) (hgG : g ∈ G)
+    (hq : norm q ≤ norm (monomial m x * g))
+    (hpqq : norm (monomial m x * g + q) = norm q) :
+    EqvGen (fun p q => Nonempty (LeadReduction G p q)) (monomial m x * g + q) q := by
+  by_cases hq0 : q = 0
+  · subst hq0
+    simp only [norm_zero, bot_le, add_zero, norm_eq_bot_iff] at hpqq
+    simp [hpqq]
+    exact EqvGen.refl _
+  by_cases hx0 : x = 0
+  · simp_all
+  have hpq0 : monomial m x * g + q ≠ 0 := by intro h; simp_all [@eq_comm _ ⊥]
+  have hg0 : g ≠ 0 := by rintro rfl; simp_all
+  have hmm : norm q = norm (monomial m x * g) := by
+    refine le_antisymm hq ?_
+    · calc norm ((monomial m) x * g) = norm ((monomial m) x * g + q - q) := by simp_all
+        _ ≤ max (norm ((monomial m) x * g + q)) (norm q) := norm_sub_le
+        _ ≤ _ := max_le (le_of_eq hpqq) le_rfl
+  have hmp : leadingMonomial (monomial m x * g + q) = leadingMonomial q := by
+    classical rw [norm_eq_ite, norm_eq_ite] at hpqq; simp_all
+  let k := q - (monomial m (mleadingCoeff q / mleadingCoeff g)) * g
+  have hnk : norm k < norm q := by
+    refine norm_sub_lt hq0 ?_ ?_
+    · classical simp only [norm_eq_ite, hq0, ↓reduceIte, mul_eq_zero, monomial_eq_zero, hx0, hg0,
+        or_self, WithBot.coe_inj, size_injective.eq_iff] at hmm
+      rw [hmm, ← leadingMonomial_C_mul
+        (show mleadingCoeff q / mleadingCoeff g / x ≠ 0 by simp_all)]
+      congr 1
+      simp only [div_eq_mul_inv, mul_assoc, C_mul, monomial_eq, mul_eq_mul_left_iff, map_eq_zero,
+        inv_eq_zero, mleadingCoeff_eq_zero_iff, hg0, or_false, hq0]
+      rw [← mul_assoc, ← C_mul, inv_mul_cancel₀ hx0, map_one, one_mul]
+    · simp [mleadingCoeff_mul]
+      rw [div_mul_cancel₀]; simpa
+  let lr1 : LeadReduction G q k := by
+    refine ⟨[k], ?_, rfl⟩
+    simp only [List.chain_cons, IsSingleStepLeadReduction, List.Chain.nil, and_true]
+    refine ⟨g, m, mleadingCoeff q / mleadingCoeff g, hgG, rfl, hnk⟩
+  let lr2 : LeadReduction G ((monomial m) x * g + q) k := by
+    refine ⟨[k], ?_, rfl⟩
+    simp only [List.chain_cons, IsSingleStepLeadReduction, List.Chain.nil, and_true]
+    refine ⟨g, m, mleadingCoeff q / mleadingCoeff g + x, hgG, ?_, by rw [hpqq]; exact hnk⟩
+    simp [k, monomial_eq, sub_mul, mul_sub, add_mul, mul_add, sub_eq_add_neg, add_comm,
+      add_left_comm, add_assoc, neg_add]
+  exact EqvGen.trans _ _ _ (EqvGen.rel _ _ ⟨lr2⟩) (EqvGen.symm _ _ (EqvGen.rel _ _ ⟨lr1⟩))
+
+theorem eqvGen_leadReduction {p : MvPolynomial σ K}
+     {G : Set (MvPolynomial σ K)} (hp : p ∈ Ideal.span G) :
+       EqvGen (fun p q => Nonempty (LeadReduction G p q)) p 0 := by
+  rw [mem_span_iff_mem_span_monomial] at hp
+  rcases Submodule.mem_span_finite_of_mem_span hp with ⟨s, hsG, hsp⟩
+  clear hp
+  induction s using Finset.strongInduction generalizing p with
+  | H s ih =>
+    rw [mem_span_finset] at hsp
+    rcases hsp with ⟨x, hx⟩
+    classical
+    let s' := s.filter (fun p => x p ≠ 0)
+    replace hx : ∑ i ∈ s', x i • i = p := by
+      rw [Finset.sum_subset (Finset.filter_subset _ _), hx]
+      simp
+      tauto
+    by_cases hs' : s'.Nonempty
+    · rcases Finset.mem_image.1 (Finset.max'_mem (s'.image (fun p => norm (x p • p))) (by simpa)) with ⟨g, hgs', hg⟩
+      replace hg : ∀ g' ∈ s', norm (x g' • g') ≤ norm (x g • g) := by
+        intro g' hg'
+        exact hg ▸ Finset.le_max' (s'.image (fun p => norm (x p • p))) (norm (x g' • g'))
+          (Finset.mem_image_of_mem (fun p => norm (x p • p)) hg')
+      rw [← Finset.insert_erase hgs', Finset.sum_insert (Finset.not_mem_erase _ _)] at hx
+      have hss' : s'.erase g ⊂ s := Finset.ssubset_of_ssubset_of_subset
+        (Finset.erase_ssubset hgs')
+        (Finset.filter_subset (fun p => x p ≠ 0) _)
+      have hsum : ∑ i ∈ s'.erase g, x i • i ∈ Submodule.span K (s'.erase g) :=
+        Submodule.sum_mem _ (fun i hi => Submodule.smul_mem _ _ (Submodule.subset_span hi))
+      have := ih (s'.erase g) hss' (Set.Subset.trans (
+        Finset.coe_subset.2 hss'.1) hsG) hsum
+      have := (Finset.coe_subset.2 (Finset.filter_subset (fun p => x p ≠ 0) _)).trans hsG hgs'
+      simp only [Set.mem_mul, Set.mem_range, exists_exists_eq_and] at this
+      rcases this with ⟨y, g, hgG, rfl⟩
+      subst hx
+      rcases lt_trichotomy (norm (x (monomial y 1 * g) • (monomial y 1 * g) + ∑ i in s'.erase (monomial y 1 * g), x i • i))
+        (norm (∑ i in s'.erase (monomial y 1 * g), x i • i)) with hglt | hglt | hglt
+      · refine EqvGen.trans _ _ _ (EqvGen.symm _ _ ?_) this
+        refine EqvGen.rel _ _ ⟨⟨[x (monomial y 1 * g) • (monomial y 1 * g) + ∑ i in s'.erase (monomial y 1 * g), x i • i], ?_, rfl⟩⟩
+        simp only [List.chain_cons, IsSingleStepLeadReduction, List.Chain.nil, and_true]
+        refine ⟨g, y, -x (monomial y 1 * g), hgG, ?_, hglt⟩
+        simp [smul_eq_C_mul, monomial_eq, mul_assoc, add_comm]
+      · rw [← smul_mul_assoc, smul_monomial, smul_eq_mul, mul_one] at hglt ⊢
+        refine EqvGen.trans _ _ _ ?_ this
+        refine eqvGen_add _ _ hgG ?_ hglt
+        refine norm_sum_le_of_le _ _ _ ?_
+        intro i hi
+        have := hg i (Finset.erase_subset _ _ hi)
+        rwa [← smul_mul_assoc, smul_monomial, smul_eq_mul, mul_one] at this
+      · refine EqvGen.trans _ _ _ ?_ this
+        refine EqvGen.rel _ _ ⟨⟨[∑ i in s'.erase (monomial y 1 * g), x i • i], ?_, rfl⟩⟩
+        simp only [List.chain_cons, IsSingleStepLeadReduction, List.Chain.nil, and_true]
+        refine ⟨g, y, x (monomial y 1 * g), hgG, ?_, hglt⟩
+        simp [smul_eq_C_mul, monomial_eq, mul_assoc]
+    · simp_all only [Finset.not_nonempty_iff_eq_empty, Finset.sum_empty]
+      exact EqvGen.refl _
 
 end MonomialOrder
 
