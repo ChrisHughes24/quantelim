@@ -1,9 +1,3 @@
-/-
-Copyright (c) 2024 Chris Hughes. All rights reserved.
-Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Chris Hughes
--/
-
 import Mathlib.Algebra.MvPolynomial.Basic
 import Mathlib.Data.Finsupp.PWO
 import Mathlib.Algebra.MvPolynomial.CommRing
@@ -286,7 +280,7 @@ structure IsGroebnerBasis (G : Set (MvPolynomial σ K)) : Prop where
 
 variable {size} {G : Set (MvPolynomial σ K)}
 
-def IsReduced (G : Set (MvPolynomial σ K)) (p : MvPolynomial σ K) : Prop :=
+def IsLeadReduced (G : Set (MvPolynomial σ K)) (p : MvPolynomial σ K) : Prop :=
   p = 0 ∨ ∀ g ∈ G, g ≠ 0 → ¬ leadingMonomial g ≤ leadingMonomial p
 
 theorem IsGroebnerBasis_iff_monomialIdeal_eq :
@@ -313,9 +307,9 @@ theorem IsGroebnerBasis_iff_leadingMonomial_le :
       rcases h1 m hmf with ⟨g, hg, hgm⟩
       exact ⟨g, Ideal.subset_span hg, hgm⟩
 
-theorem IsGroebnerBasis_iff_isReduced_eq_zero  :
-    IsGroebnerBasis G ↔ ∀ f ∈ Ideal.span G, IsReduced G f → f = 0 := by
-  simp only [IsGroebnerBasis_iff_leadingMonomial_le, IsReduced]
+theorem IsGroebnerBasis_iff_IsLeadReduced_eq_zero  :
+    IsGroebnerBasis G ↔ ∀ f ∈ Ideal.span G, IsLeadReduced G f → f = 0 := by
+  simp only [IsGroebnerBasis_iff_leadingMonomial_le, IsLeadReduced]
   refine forall_congr' fun f => forall_congr' fun hf => ?_
   by_cases hf0 : f = 0
   · subst hf0; simp
@@ -324,7 +318,7 @@ theorem IsGroebnerBasis_iff_isReduced_eq_zero  :
 variable (G)
 
 @[simp]
-theorem isReduced_zero : IsReduced G 0 := Or.inl rfl
+theorem IsLeadReduced_zero : IsLeadReduced G 0 := Or.inl rfl
 
 /-- This means that `p` lead reduces to `q` in a single step.  -/
 def IsSingleStepLeadReduction (p q : MvPolynomial σ K) : Prop :=
@@ -369,7 +363,7 @@ theorem LeadReduction.sub_mem_span {p q : MvPolynomial σ K} (l : LeadReduction 
     exact Ideal.mul_mem_left _ _ (Ideal.subset_span hgG)
 
 @[simp]
-theorem LeadReduction.mem_span_iff {p q : MvPolynomial σ K} {l : LeadReduction G p q} :
+theorem LeadReduction.mem_span_iff {p q : MvPolynomial σ K} (l : LeadReduction G p q) :
     p ∈ Ideal.span G ↔ q ∈ Ideal.span G := by
   rw [← Ideal.add_mem_iff_left _ ((Ideal.neg_mem_iff _).2 (sub_mem_span l)), ← l.last_eq]
   simp
@@ -430,12 +424,13 @@ noncomputable def singleLeadReduction {p g : MvPolynomial σ K} (hgG : g ∈ G)
 
 attribute [local instance] WellFoundedLT.toWellFoundedRelation
 
+variable (G)
 theorem exists_leadReduction [WellFoundedLT α] : ∀ p : MvPolynomial σ K,
-    ∃ (q : MvPolynomial σ K) (_l : LeadReduction G p q), IsReduced G q := by
+    ∃ (q : MvPolynomial σ K) (_l : LeadReduction G p q), IsLeadReduced G q := by
   intro p
-  by_cases hp : IsReduced G p
+  by_cases hp : IsLeadReduced G p
   · exact ⟨p, LeadReduction.refl p, hp⟩
-  · simp only [IsReduced, ne_eq, not_or, not_forall, Classical.not_imp, Decidable.not_not] at hp
+  · simp only [IsLeadReduced, ne_eq, not_or, not_forall, Classical.not_imp, Decidable.not_not] at hp
     rcases hp.2 with ⟨g, hg, hg0, hgp⟩
     let l := singleLeadReduction hg hgp hp.1 hg0
     let k := l.1
@@ -450,6 +445,26 @@ theorem exists_leadReduction [WellFoundedLT α] : ∀ p : MvPolynomial σ K,
   termination_by p => norm p
 
 end
+
+theorem IsGroebnerBasis_iff_exists_leadReduction_zero [WellFoundedLT α] :
+    IsGroebnerBasis G ↔ ∀ f ∈ Ideal.span G, Nonempty (LeadReduction G f 0) := by
+  rw [IsGroebnerBasis_iff_leadingMonomial_le]
+  refine ⟨?_, ?_⟩
+  · intro h f hf
+    rcases exists_leadReduction G f with ⟨q, l, hq⟩
+    by_cases hq0 : q = 0
+    · exact hq0 ▸ ⟨l⟩
+    · rcases h q (l.mem_span_iff.1 hf) hq0 with ⟨g, hg⟩
+      exact (Or.resolve_left hq hq0 g hg.1 hg.2.1 hg.2.2).elim
+  · intro h f hf hf0
+    rcases h f hf with ⟨⟨l, hlc, hl⟩⟩
+    cases l;
+    · simp_all
+    · simp [IsSingleStepLeadReduction] at hlc
+
+
+
+
 
 open Relation
 
@@ -583,12 +598,11 @@ noncomputable def zero_reduction_of_confluent {p : MvPolynomial σ K}
   exact ⟨lt₁⟩
 
 def criticalPair (g₁ g₂ : MvPolynomial σ K) : MvPolynomial σ K :=
-  let m := leadingMonomial g₁ - leadingMonomial g₂
+  let m := leadingMonomial g₁ ⊔ leadingMonomial g₂
   let x := mleadingCoeff g₁ / mleadingCoeff g₂
-  g₁ - monomial m x * g₂
 
-theorem exists_criticalPair {p : MvPolynomial σ K} (hp : p ∈ Ideal.span G) (hp0 : p ≠ 0)
-    (hR : IsReduced G p) : ∃ g₁ g₂,
+
+theorem confluent_of_criticialPair  : ∃ g₁ g₂,
 
 
 end MonomialOrder

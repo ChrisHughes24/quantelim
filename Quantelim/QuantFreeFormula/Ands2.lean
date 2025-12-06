@@ -1,98 +1,64 @@
 import QuantElim.Poly.Zeros
 import QuantElim.QuantFreeFormula.Basic
 import QuantElim.forMathlib
+import Mathlib.Data.Vector.Basic
 
 variable {n : ℕ}
 
--- Invariants to maintain. No constant polys in any list. Eqs has smallest by lex leadingMon degree at head
-structure Ands (n : ℕ) : Type where
-  (eqs : List (Poly n))
-  (neq : Poly n)
+open Mathlib
+
+structure Ands (freeVars : ℕ) : Type where
+  (letVars : ℕ)
+  (boundVars : ℕ)
+  (letsEqs : Vector (Poly freeVars) letVars)
+  (eqs : List (Poly (letVars + freeVars + boundVars)))
   deriving DecidableEq
 
 namespace Ands
 
-def eval {n : ℕ} (φ : Ands n) : Set (Fin n → ℂ) :=
-  { x | (∀ p ∈ φ.eqs, p.eval x = 0) ∧ (φ.neq.eval x ≠ 0) }
+def eval {freeVars : ℕ} (φ : Ands freeVars) : Set (Fin freeVars → ℂ) :=
+  { x |
+      ∀ (p : Poly freeVars), p ∈ φ.letsEqs.toList → p.eval x ≠ 0 ∧
+      let lets : Fin φ.letVars → ℂ := fun i => ((φ.letsEqs[i]).eval x)⁻¹
+      ∃ b : Fin φ.boundVars → ℂ, ∀ p ∈ φ.eqs, p.eval (Fin.append (Fin.append lets x) b) = 0 }
 
 def sumDegs (φ : Ands n) : ℕ :=
   List.sum <| φ.eqs.map Poly.natDegree
 
-def and (φ ψ : Ands n) : Ands n :=
-  { eqs := φ.eqs ++ ψ.eqs,
-    neq := lcm φ.neq ψ.neq }
+-- protected def true (n : ℕ) : Ands n :=
+--   { eqs := [],
+--     neq := 1 }
 
-@[simp]
-def eval_and (φ ψ : Ands n) :
-    (φ.and ψ).eval = φ.eval ∩ ψ.eval := by
-  ext x
-  simp [eval, and, forall_and, or_imp]
-  tauto
+-- @[simp]
+-- theorem eval_true : (Ands.true n).eval = Set.univ := by
+--   simp [eval, Ands.true]
 
-protected def true (n : ℕ) : Ands n :=
-  { eqs := [],
-    neq := 1 }
+-- protected def false (n : ℕ) : Ands n :=
+--   { eqs := [],
+--     neq := 0 }
 
-@[simp]
-theorem eval_true : (Ands.true n).eval = Set.univ := by
-  simp [eval, Ands.true]
-
-protected def false (n : ℕ) : Ands n :=
-  { eqs := [],
-    neq := 0 }
-
-@[simp]
-theorem eval_false : (Ands.false n).eval = ∅ := by
-  simp [eval, Ands.false]
+-- @[simp]
+-- theorem eval_false : (Ands.false n).eval = ∅ := by
+--   simp [eval, Ands.false]
 
 open Poly QuantFreeFormula
 
-def toQuantFreeFormula (φ : Ands n) : QuantFreeFormula n :=
-  (φ.eqs.foldr (fun p ψ => (eqZero p).and ψ) tru).and (neZero φ.neq)
+-- def toQuantFreeFormula (φ : Ands n) : QuantFreeFormula n :=
+--   (φ.eqs.foldr (fun p ψ => (eqZero p).and ψ) tru).and (neZero φ.neq)
 
-@[simp]
-theorem eval_toQuantFreeFormula (φ : Ands n) :
-    φ.toQuantFreeFormula.eval = φ.eval := by
-  rcases φ with ⟨eqs, neq⟩
-  ext x
-  simp only [toQuantFreeFormula, QuantFreeFormula.eval_and, QuantFreeFormula.eval, Set.inter_empty,
-    ne_eq, Set.inter_univ, Set.empty_union, Set.mem_inter_iff, Set.mem_setOf_eq, eval,
-    and_congr_left_iff]
-  intro h
-  induction eqs with
-  | nil => simp
-  | cons p ps ih => simp [ih]
+-- @[simp]
+-- theorem eval_toQuantFreeFormula (φ : Ands n) :
+--     φ.toQuantFreeFormula.eval = φ.eval := by
+--   rcases φ with ⟨eqs, neq⟩
+--   ext x
+--   simp only [toQuantFreeFormula, QuantFreeFormula.eval_and, QuantFreeFormula.eval, Set.inter_empty,
+--     ne_eq, Set.inter_univ, Set.empty_union, Set.mem_inter_iff, Set.mem_setOf_eq, eval,
+--     and_congr_left_iff]
+--   intro h
+--   induction eqs with
+--   | nil => simp
+--   | cons p ps ih => simp [ih]
 
-def reduceWith (φ : Ands (n+1)) (i : Fin φ.eqs.length) : Ands (n + 1) where
-  eqs := φ.eqs.mapIdx (fun j p => if i = j then p else pMod p (φ.eqs[i]))
-  neq := φ.neq
-
-theorem mem_reduceWith {φ : Ands (n+1)} {i : Fin φ.eqs.length}
-    {x : Fin (n+1) → ℂ} (hx : (φ.eqs[i]).leadingCoeff.eval (fun i => x i.succ) ≠ 0) :
-    x ∈ (φ.reduceWith i).eval ↔ x ∈ φ.eval := by
-  simp only [eval, reduceWith, Fin.getElem_fin, List.get_eq_getElem,
-    forall_exists_index, ne_eq, Set.mem_setOf_eq, List.forall_mem_iff_getElem,
-    List.length_mapIdx, List.getElem_mapIdx]
-  simp only [Fin.getElem_fin, ne_eq] at hx
-  refine ⟨?_, ?_⟩
-  · intro h
-    have := h.1 i i.prop
-    simp only [↓reduceIte] at this
-    simp only [h.2, not_false_eq_true, and_true]
-    intro j hj
-    replace h := h.1 j hj
-    split_ifs at h
-    · assumption
-    · rwa [eval_pMod_eq_zero_iff hx this] at h
-  · intro h
-    have := h.1 i i.prop
-    simp only [↓reduceIte] at this
-    simp only [h.2, not_false_eq_true, and_true]
-    intro j hj
-    replace h := h.1 j hj
-    split_ifs
-    · assumption
-    · rwa [eval_pMod_eq_zero_iff hx this]
 
 theorem sumDegs_le_of_forall_le {φ ψ : Ands n}
     (h₁ : φ.eqs.length = ψ.eqs.length)
@@ -111,25 +77,8 @@ theorem sumDegs_lt_of_forall_le_of_lt {φ ψ : Ands n}
   rw [← Fin.sum_univ_get', ← Fin.sum_univ_get', ← Fin.sum_congr' _ h₁]
   exact Finset.sum_lt_sum (fun i hi => h i) (by simpa)
 
-theorem sumDegs_reduceWith {φ : Ands (n+1)} {i j : Fin φ.eqs.length}
-    (hij : i ≠ j)
-    (h₁ : 0 < (φ.eqs[i]).degree)
-    (h₂ : (φ.eqs[i]).degree ≤ (φ.eqs[j]).degree) :
-    (φ.reduceWith i).sumDegs < φ.sumDegs := by
-  refine sumDegs_lt_of_forall_le_of_lt ?_ ?_ ?_
-  · simp [reduceWith]
-  · intro k
-    dsimp [reduceWith]
-    erw [List.getElem_mapIdx]
-    split_ifs
-    · rfl
-    · exact natDegree_pMod_le_left
-  · use Fin.cast (by simp [reduceWith]) j
-    dsimp [reduceWith]
-    erw [List.getElem_mapIdx]
-    simp only [Fin.val_ne_of_ne hij, ↓reduceIte]
-    exact lt_of_lt_of_le (natDegree_pMod_lt h₁)
-      (natDegree_le_natDegree_of_degree_le_degree h₂)
+theorem insertEq
+
 
 def eraseLeadAt (φ : Ands (n+1)) (i : Fin φ.eqs.length) : Ands (n+1) where
   eqs := φ.eqs.modify Poly.eraseLead i
